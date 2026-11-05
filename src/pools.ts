@@ -17,8 +17,8 @@ let seq = 0;
 const nid = () => `p${++seq}`;
 
 /** In-memory mirror of supabase/migrations/0002_friend_pools.sql */
-export function createPoolsStore(debit: (n: number) => boolean, credit: (n: number) => void) {
-  const pools: Pool[] = [
+export function createPoolsStore(debit: (n: number) => boolean, credit: (n: number) => void, onChange: (pools: Pool[]) => void = () => {}) {
+  let pools: Pool[] = [
     {
       id: nid(), groupName: 'party crew', question: 'do we make the 07:10 train to barcelona?', stake: 50, createdBy: 'alex',
       status: 'open', options: [{ id: 'o1', label: 'yes, all of us' }, { id: 'o2', label: 'someone misses it' }],
@@ -42,6 +42,12 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
   return {
     list: () => pools.map((p) => ({ ...p })),
 
+    /** Put back pools saved on this device. */
+    restore(saved: Pool[]) {
+      pools = saved;
+      seq = Math.max(seq, ...saved.map((p) => Number(p.id.slice(1)) || 0));
+    },
+
     create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string }): Pool {
       const topic = blockedTopic(input.question + ' ' + input.options.map((o) => o.label).join(' '));
       if (topic) throw new Error(`pools about ${topic} aren’t allowed. keep it fun for everyone.`);
@@ -52,6 +58,7 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
         options: input.options, entries: [], votes: [],
       };
       pools.unshift(p);
+      onChange(pools);
       return p;
     },
 
@@ -59,6 +66,7 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
     simulateConsent(id: string) {
       const p = pools.find((x) => x.id === id)!;
       if (p.status === 'pending_consent') p.status = 'open';
+      onChange(pools);
     },
 
     join(id: string, optionId: string) {
@@ -74,18 +82,21 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
           p.entries.push({ userId: m, optionId: p.options[Math.floor(Math.random() * p.options.length)].id });
         }
       }
+      onChange(pools);
     },
 
     propose(id: string, optionId: string) {
       const p = pools.find((x) => x.id === id)!;
       if (p.status !== 'open') throw new Error('pool isn’t open.');
       p.status = 'proposed'; p.proposedOptionId = optionId; p.votes = [];
+      onChange(pools);
     },
 
     vote(id: string, confirm: boolean) {
       const p = pools.find((x) => x.id === id)!;
       if (!p.entries.some((e) => e.userId === ME)) throw new Error('only people in the pool can vote.');
       p.votes = p.votes.filter((v) => v.userId !== ME).concat({ userId: ME, confirm });
+      onChange(pools);
     },
 
     /** Demo shortcut for the 48h window: other participants confirm, then settle. */
@@ -103,6 +114,7 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
         p.status = 'voided';
         if (p.entries.some((e) => e.userId === ME)) credit(p.stake);
       }
+      onChange(pools);
     },
   };
 }

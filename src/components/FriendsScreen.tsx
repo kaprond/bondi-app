@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../avatar';
 import { shareText } from '../share';
 import {
-  AVATAR_EMOJI, cancelRequest, createCrew, crewList, friendList, incomingList, INVITE_CODE, inviteLink, me, ME, nameOf,
+  AVATAR_EMOJI, cancelRequest, createCrew, crewList, friendList, incomingList, inviteCode, inviteLink, me, ME, nameOf,
   Person, relation, respond, search, sendRequest, suggestions, useSocial,
 } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
@@ -24,7 +24,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
   const board = [...friends, me()].sort((a, b) => b.stats.hitRate - a.stats.hitRate || b.stats.calls - a.stats.calls);
 
   async function invite() {
-    const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. use my code ${INVITE_CODE} and we both get 500 coins.`, inviteLink);
+    const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink());
     setCopied(r === 'copied' ? 'link copied' : r === 'shared' ? 'sent!' : null);
     if (r !== 'dismissed') setTimeout(() => setCopied(null), 2000);
   }
@@ -42,7 +42,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
           <View style={styles.inviteRow}>
             <View style={styles.code}>
               <T size={12} weight="bold" color={colors.muted}>your code</T>
-              <H size={22} color={colors.deep} style={{ letterSpacing: 1 }}>{INVITE_CODE}</H>
+              <H size={22} color={colors.deep} style={{ letterSpacing: 1 }}>{inviteCode()}</H>
             </View>
             <PillButton label={copied ?? 'invite friends'} variant="white" onPress={invite} style={{ flex: 1 }}
               icon={<Ionicons name={copied ? 'checkmark' : 'paper-plane'} size={18} color={colors.brand} />} />

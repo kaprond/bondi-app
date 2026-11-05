@@ -1,44 +1,96 @@
 import { BetResult, FeedClip, Side, Stake } from './types';
 
+export interface Daily { claimed: boolean; dayStreak: number; amount: number }
+
 export interface BondiApi {
   getFeed(): Promise<FeedClip[]>;
   getBalance(): Promise<number>;
-  claimDaily(): Promise<number>;
+  /** Today's reward: whether it's claimed, the day streak, and what claiming pays (or paid). */
+  getDaily(): Promise<Daily>;
+  claimDaily(): Promise<{ balance: number; amount: number; dayStreak: number }>;
+  /** New players only. Both sides get 500 coins and become friends. Returns the new balance. */
+  redeemInvite(code: string): Promise<number>;
   placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult>;
 }
+
+/** Daily reward grows with the day streak: 500 on day 1, +100 a day, capped at 1,000 from day 6. */
+export const dailyAmount = (dayStreak: number) => 500 + 100 * (Math.min(Math.max(dayStreak, 1), 6) - 1);
 
 /**
  * In-memory stand-in for the Supabase backend (supabase/migrations/0001_init.sql).
  * Mirrors place_bet(): outcome and reveal URL stay private until the stake is debited.
  */
 import { demoClip } from './demoClips';
+import { onHydrate, save } from './persist';
+const secret = (outcome: Side, salt: string, id: string) => ({ outcome, salt, revealUrl: demoClip(`${id}-reveal`) });
 const privateClips: Record<string, { outcome: Side; salt: string; revealUrl: string | number }> = {
-  c1: { outcome: 'a', salt: 'bnd-2f22765d0493', revealUrl: demoClip('c1-reveal') },
-  c2: { outcome: 'b', salt: 'bnd-6b1f53303a73', revealUrl: demoClip('c2-reveal') },
-  c3: { outcome: 'a', salt: 'bnd-a625406f6977', revealUrl: demoClip('c3-reveal') },
+  c1: secret('a', 'bnd-2f22765d0493', 'c1'),
+  c2: secret('b', 'bnd-6b1f53303a73', 'c2'),
+  c3: secret('a', 'bnd-a625406f6977', 'c3'),
+  c4: secret('b', 'bnd-a6724d377c53', 'c4'),
+  c5: secret('b', 'bnd-22bb56264cf4', 'c5'),
+  c6: secret('a', 'bnd-7201e1d18903', 'c6'),
+  c7: secret('b', 'bnd-42a8afca576a', 'c7'),
+  c8: secret('a', 'bnd-4966e7600e82', 'c8'),
 };
+const O = '@bondi.originals';
 const feed: FeedClip[] = [
-  { id: 'c1', title: 'cup shot from the balcony', creator: '@bondi.originals', question: 'does it land in the cup?', labelA: 'lands it', labelB: 'misses', oddsA: 1.85, oddsB: 2.1, crowdA: 58, teaserUrl: demoClip('c1-teaser'), commitHash: '061e5cffc840422cc8ea8528ec3a5c9d37ded7f5f95cc12b1dba9847e8ad3491' },
-  { id: 'c2', title: 'the slow slide', creator: '@bondi.originals', question: 'does it stop in time?', labelA: 'stops on the edge', labelB: 'slides off', oddsA: 1.9, oddsB: 1.9, crowdA: 71, teaserUrl: demoClip('c2-teaser'), commitHash: 'a1a6d4f722307e4091dd177ccefb969c7770632d5d0fca4f30f4cad88635b61b' },
-  { id: 'c3', title: 'canal race, final 20 metres', creator: '@bondi.originals', question: 'who crosses first?', labelA: 'orange', labelB: 'blue', oddsA: 1.95, oddsB: 1.85, crowdA: 44, teaserUrl: demoClip('c3-teaser'), commitHash: '7eb159a1cc819a8dd9e56c831d94141cda07ae459cc4ed6e18d6d6251d1a2a3d' },
+  { id: 'c1', title: 'cup shot from the balcony', creator: O, question: 'does it land in the cup?', labelA: 'lands it', labelB: 'misses', oddsA: 1.85, oddsB: 2.1, crowdA: 58, teaserUrl: demoClip('c1-teaser'), commitHash: '061e5cffc840422cc8ea8528ec3a5c9d37ded7f5f95cc12b1dba9847e8ad3491' },
+  { id: 'c4', title: 'penalty in the park', creator: '@vondelpark.fc', question: 'does the keeper save it?', labelA: 'saved', labelB: 'goal', oddsA: 2.2, oddsB: 1.65, crowdA: 38, teaserUrl: demoClip('c4-teaser'), commitHash: 'f99663638c79dfb45a01da2f8d6a99dcfd17db91a05c5cb5ad5a7c7466e4905a' },
+  { id: 'c2', title: 'the slow slide', creator: O, question: 'does it stop in time?', labelA: 'stops on the edge', labelB: 'slides off', oddsA: 1.9, oddsB: 1.9, crowdA: 71, teaserUrl: demoClip('c2-teaser'), commitHash: 'a1a6d4f722307e4091dd177ccefb969c7770632d5d0fca4f30f4cad88635b61b' },
+  { id: 'c6', title: 'running for tram 2', creator: '@late.again', question: 'do they make the tram?', labelA: 'makes it', labelB: 'doors shut', oddsA: 1.9, oddsB: 1.9, crowdA: 47, teaserUrl: demoClip('c6-teaser'), commitHash: 'b142e378f6c3aab6ec15dc0ab85b7597b7c7f2eb4809ac3ebcc5c9893f910e41' },
+  { id: 'c5', title: 'bottle flip, attempt 47', creator: '@flipdaily', question: 'does it land upright?', labelA: 'lands it', labelB: 'tips over', oddsA: 1.75, oddsB: 2.05, crowdA: 63, teaserUrl: demoClip('c5-teaser'), commitHash: '90f976ce5666a7574e1b19a021b84e823376dc096efd9c58a2beed7d9347e98a' },
+  { id: 'c3', title: 'canal race, final 20 metres', creator: O, question: 'who crosses first?', labelA: 'orange', labelB: 'blue', oddsA: 1.95, oddsB: 1.85, crowdA: 44, teaserUrl: demoClip('c3-teaser'), commitHash: '7eb159a1cc819a8dd9e56c831d94141cda07ae459cc4ed6e18d6d6251d1a2a3d' },
+  { id: 'c7', title: 'the domino run', creator: '@tinychaos', question: 'does the last one fall?', labelA: 'all fall', labelB: 'chain stops', oddsA: 1.6, oddsB: 2.3, crowdA: 74, teaserUrl: demoClip('c7-teaser'), commitHash: '6d53b6a49c00d8bea2e5e64cb9f4ec407078baab2bacf696e2d91de1b398feb7' },
+  { id: 'c8', title: 'one more block', creator: '@tinychaos', question: 'does the tower hold?', labelA: 'holds', labelB: 'topples', oddsA: 2.0, oddsB: 1.8, crowdA: 41, teaserUrl: demoClip('c8-teaser'), commitHash: '4700c952b2bc9ea37f351a07ee2b7a8439efeeb57c207a0b1d32d5c91458d6ba' },
 ];
 
 /** Demo wallet shared by the feed and friend pools. */
 export const wallet = {
   balance: 1000, // signup grant, same as 0003_profiles_trigger.sql
-  debit(n: number) { if (wallet.balance < n) return false; wallet.balance -= n; return true; },
-  credit(n: number) { wallet.balance += n; },
+  debit(n: number) { if (wallet.balance < n) return false; wallet.balance -= n; save({ balance: wallet.balance }); return true; },
+  credit(n: number) { wallet.balance += n; save({ balance: wallet.balance }); },
 };
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const day = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
 export function createMockApi(): BondiApi {
   let lastDaily = '';
+  let dayStreak = 0;
+  let redeemed = false;
   const played = new Set<string>();
+  onHydrate((d) => {
+    if (typeof d.balance === 'number') wallet.balance = d.balance;
+    if (Array.isArray(d.played)) (d.played as string[]).forEach((id) => played.add(id));
+    if (typeof d.lastDaily === 'string') lastDaily = d.lastDaily;
+    if (typeof d.dayStreak === 'number') dayStreak = d.dayStreak;
+    redeemed = d.redeemed === true;
+  });
+  const streakIfClaimedToday = () => (lastDaily === day(-1) ? dayStreak + 1 : 1);
   return {
     async getFeed() { return feed.filter((c) => !played.has(c.id)); },
     async getBalance() { return wallet.balance; },
+    async getDaily() {
+      if (lastDaily === day()) return { claimed: true, dayStreak, amount: dailyAmount(dayStreak) };
+      const next = streakIfClaimedToday();
+      return { claimed: false, dayStreak: next, amount: dailyAmount(next) };
+    },
     async claimDaily() {
-      const today = new Date().toISOString().slice(0, 10);
-      if (lastDaily !== today) { lastDaily = today; wallet.credit(500); }
+      if (lastDaily === day()) return { balance: wallet.balance, amount: 0, dayStreak };
+      dayStreak = streakIfClaimedToday();
+      lastDaily = day();
+      const amount = dailyAmount(dayStreak);
+      wallet.credit(amount);
+      save({ lastDaily, dayStreak });
+      return { balance: wallet.balance, amount, dayStreak };
+    },
+    async redeemInvite(code) {
+      if (!/^BND-[A-Z0-9]{4}$/.test(code.toUpperCase())) throw new Error('invite code not found');
+      if (redeemed) throw new Error('you already used an invite code');
+      redeemed = true;
+      save({ redeemed });
+      wallet.credit(500);
       return wallet.balance;
     },
     async placeBet(clipId, choice, stake) {
@@ -51,6 +103,7 @@ export function createMockApi(): BondiApi {
       const payout = won ? Math.floor(stake * (choice === 'a' ? clip.oddsA : clip.oddsB)) : 0;
       wallet.credit(payout);
       played.add(clipId);
+      save({ played: [...played] });
       return { betId: `${clipId}-${Date.now()}`, won, payout, outcome: secret.outcome, salt: secret.salt, revealUrl: secret.revealUrl, balance: wallet.balance };
     },
   };

@@ -3,15 +3,16 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../avatar';
 import { useStats } from '../session';
+import { Daily, dailyAmount } from '../api';
 import { shareText } from '../share';
-import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, INVITE_CODE, inviteLink, me, updateProfile, useSocial } from '../social';
+import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLink, me, updateProfile, useSocial } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 
-interface Props { renderBar: RenderBar; balance: number; dailyClaimed: boolean; onClaim: () => void; onFriends: () => void }
+interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void }
 
-export function ProfileScreen({ renderBar, balance, dailyClaimed, onClaim, onFriends }: Props) {
+export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }: Props) {
   useSocial();
   const s = useStats();
   const p = me();
@@ -60,7 +61,8 @@ export function ProfileScreen({ renderBar, balance, dailyClaimed, onClaim, onFri
             <T size={12} weight="semi" color={colors.white}>no cash value</T>
           </View>
           <View style={styles.inline}><Coin size={30} /><H size={48} color={colors.white}>{balance}</H></View>
-          <PillButton label={dailyClaimed ? 'come back tomorrow for 500 more' : 'claim today’s 500 free coins'} variant="white" disabled={dailyClaimed} onPress={onClaim} />
+          {daily && daily.dayStreak > 1 && <T size={13} weight="bold" color={colors.yellow}>🔥 {daily.dayStreak} day streak</T>}
+          <PillButton label={!daily ? 'loading…' : daily.claimed ? `come back tomorrow for +${dailyAmount(daily.dayStreak + 1)}` : `claim today’s +${daily.amount} coins`} variant="white" disabled={!daily || daily.claimed} onPress={onClaim} />
         </View>
 
         <View style={styles.grid}>
@@ -99,11 +101,11 @@ export function ProfileScreen({ renderBar, balance, dailyClaimed, onClaim, onFri
           ))}
         </View>
 
-        <Pressable onPress={() => shareText(`come play bondi with me. use my code ${INVITE_CODE} and we both get 500 coins.`, inviteLink)} style={styles.invite} accessibilityRole="button">
+        <Pressable onPress={() => shareText(`come play bondi with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())} style={styles.invite} accessibilityRole="button">
           <T size={30}>💌</T>
           <View style={{ flex: 1 }}>
             <T weight="bold" color={colors.white}>invite friends, get 500 coins each</T>
-            <T size={13} color={colors.white}>your code {INVITE_CODE}</T>
+            <T size={13} color={colors.white}>your code {inviteCode()}</T>
           </View>
           <Ionicons name="share-outline" size={22} color={colors.white} />
         </Pressable>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>%WEB_TITLE% · guess what happens next</title>
+    <meta name="description" content="Short clips pause right before the moment. Call what happens next with free coins, then watch it play out. Play with friends." />
+    <!-- Link previews (WhatsApp, iMessage, X, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="bondi" />
+    <meta property="og:title" content="bondi · guess what happens next" />
+    <meta property="og:description" content="The clip pauses. You call it. Free coins, no cash. Come play with me." />
+    <meta property="og:url" content="https://bondi-app-one.vercel.app/" />
+    <meta property="og:image" content="https://bondi-app-one.vercel.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="bondi · guess what happens next" />
+    <meta name="twitter:description" content="The clip pauses. You call it. Free coins, no cash." />
+    <meta name="twitter:image" content="https://bondi-app-one.vercel.app/og.png" />
+    <!-- Add to home screen -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="bondi" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <style id="expo-reset">
+      html, body { height: 100%; margin: 0; }
+      body { overflow: hidden; background: radial-gradient(120% 80% at 50% 0%, #54B8CE, #0095B6); }
+      #root { display: flex; height: 100%; flex: 1; max-width: 480px; margin: 0 auto; background: #F1F9FB; }
+      #desk-hint { display: none; position: fixed; left: 24px; bottom: 20px; color: #fff; font: 600 13px/1.4 system-ui, sans-serif; opacity: .85; }
+      /* Desktop: show the app as a phone in the middle of the page */
+      @media (min-width: 600px) and (min-height: 760px) {
+        #root { max-width: 430px; height: min(900px, calc(100% - 48px)); margin: 24px auto; border-radius: 36px; overflow: hidden;
+          box-shadow: 0 30px 80px rgba(0, 40, 50, .45), 0 0 0 10px rgba(255, 255, 255, .14); }
+        #desk-hint { display: block; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>bondi needs JavaScript to run.</noscript>
+    <div id="root"></div>
+    <div id="desk-hint">↑ ↓ to scroll clips · best on your phone</div>
+  </body>
+</html>

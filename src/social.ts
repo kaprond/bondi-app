@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { onHydrate, save } from './persist';
 
 /**
  * Profiles, friends, invites and crews for the demo build.
@@ -37,12 +38,33 @@ let crews: Crew[] = [
   { id: 'party', name: 'party crew', emoji: '🎉', memberIds: [ME, 'alex', 'sam', 'taylor'] },
   { id: 'college', name: 'college', emoji: '🎓', memberIds: [ME, 'alex', 'jordan', 'sam', 'taylor'] },
 ];
-export const INVITE_CODE = 'BND-7Q4K';
-export const inviteLink = `https://bondi.app/i/${INVITE_CODE}`;
+/** Where the web app lives. Invite links open it with ?i=<code>&from=<handle>. */
+export const APP_URL = 'https://bondi-app-one.vercel.app';
+const newCode = () => 'BND-' + Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+/** Each player gets their own code (server-side: invite_codes in 0004_social.sql). */
+let myCode = newCode();
+export const inviteCode = () => myCode;
+export function inviteLink(): string {
+  const loc = (globalThis as { location?: Location }).location; // web only
+  const base = loc?.origin?.startsWith('http') ? loc.origin + (loc.pathname || '/').replace(/index\.html$/, '') : APP_URL + '/';
+  return `${base}${base.endsWith('/') ? '' : '/'}?i=${myCode}&from=${encodeURIComponent(people.me.handle)}`;
+}
 
 let version = 0;
 const listeners = new Set<() => void>();
-const emit = () => { version++; listeners.forEach((l) => l()); };
+const persist = () => save({ social: { me: people.me, extra: Object.values(people).filter((p) => p.id.startsWith('u:')), friends: [...friends], incoming: [...incoming], outgoing: [...outgoing], crews, code: myCode } });
+const emit = () => { version++; persist(); listeners.forEach((l) => l()); };
+onHydrate((d) => {
+  const s = d.social as undefined | { me: Person; extra: Person[]; friends: string[]; incoming: string[]; outgoing: string[]; crews: Crew[]; code: string };
+  if (!s) { persist(); return; }
+  people.me = { ...people.me, ...s.me };
+  for (const p of s.extra ?? []) people[p.id] = p;
+  friends = new Set(s.friends); incoming = new Set(s.incoming); outgoing = new Set(s.outgoing);
+  crews = s.crews ?? crews;
+  if (s.code) myCode = s.code;
+  // a request that was still pending when the page closed: in the demo they accept
+  for (const id of outgoing) { outgoing.delete(id); friends.add(id); }
+});
 /** Re-render on any social change. */
 export function useSocial(): number {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => version, () => version);
@@ -88,6 +110,20 @@ export function updateProfile(patch: Partial<Pick<Person, 'name' | 'handle' | 'b
 
 export function syncMyStats(s: { calls: number; hitRate: number; bestStreak: number }) {
   people.me = { ...people.me, stats: { ...people.me.stats, ...s } };
+}
+
+/** Someone's invite link brought you here: you're friends straight away. Returns their name. */
+export function befriendInviter(handle: string): Person {
+  const h = handle.trim().replace(/^@/, '').toLowerCase().slice(0, 20);
+  let p = Object.values(people).find((x) => x.id !== ME && x.handle === h);
+  if (!p) {
+    const n = [...h].reduce((a, c) => a + c.charCodeAt(0), 0);
+    p = { id: `u:${h}`, handle: h, name: h.split(/[._]/)[0] || h, emoji: AVATAR_EMOJI[n % AVATAR_EMOJI.length], color: AVATAR_COLORS[n % AVATAR_COLORS.length], bio: 'brought you to bondi', city: '', stats: { calls: 0, hitRate: 0, poolsWon: 0, bestStreak: 0 } };
+    people[p.id] = p;
+  }
+  incoming.delete(p.id); outgoing.delete(p.id); friends.add(p.id);
+  emit();
+  return p;
 }
 
 export function sendRequest(id: string) {
