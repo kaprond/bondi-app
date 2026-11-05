@@ -29,6 +29,14 @@
     "scheme": "bondi",
     "plugins": [
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "bondi needs your videos so you can post a clip.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

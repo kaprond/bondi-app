@@ -1,4 +1,5 @@
 import { BetResult, FeedClip, Side, Stake } from './types';
+import { ClipDraft, CreatorClip, draftProblems, MAX_IN_REVIEW, simulatedPlays, simulatedTake, underCap } from './creator';
 
 export interface Daily { claimed: boolean; dayStreak: number; amount: number }
 
@@ -13,6 +14,13 @@ export interface BondiApi {
   placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult>;
   /** Pays a finished daily mission once per day. The server re-checks the mission against your bets. */
   claimMission(id: string): Promise<{ balance: number; reward: number }>;
+  /**
+   * Sends your clip for review. The outcome you declare is committed (hashed) right away and a
+   * reviewer checks it against the video before the clip goes live. You can never call your own clip.
+   */
+  submitClip(draft: ClipDraft, video: { uri: string; mimeType?: string }): Promise<CreatorClip>;
+  /** Your uploaded clips with plays and commission earned, plus your balance after any new commission. */
+  getMyClips(): Promise<{ clips: CreatorClip[]; balance: number }>;
 }
 
 /** Daily reward grows with the day streak: 500 on day 1, +100 a day, capped at 1,000 from day 6. */
@@ -55,6 +63,7 @@ export const wallet = {
   credit(n: number) { wallet.balance += n; save({ balance: wallet.balance }); },
 };
 
+const REVIEW_MS = 30_000;
 const pad = (n: number) => String(n).padStart(2, '0');
 const day = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
@@ -64,7 +73,11 @@ export function createMockApi(): BondiApi {
   let redeemed = false;
   let missions: { day: string; ids: string[] } = { day: '', ids: [] };
   const played = new Set<string>();
+  let mine: (CreatorClip & { accrued?: number })[] = [];
+  let commissionDay = { day: '', paid: 0 };
   onHydrate((d) => {
+    if (Array.isArray(d.myClips)) mine = d.myClips as typeof mine;
+    if (d.commissionDay) commissionDay = d.commissionDay as typeof commissionDay;
     if (typeof d.balance === 'number') wallet.balance = d.balance;
     if (Array.isArray(d.played)) (d.played as string[]).forEach((id) => played.add(id));
     if (typeof d.lastDaily === 'string') lastDaily = d.lastDaily;
@@ -107,6 +120,40 @@ export function createMockApi(): BondiApi {
       save({ missions });
       wallet.credit(m.reward);
       return { balance: wallet.balance, reward: m.reward };
+    },
+    async submitClip(draft) {
+      const problems = draftProblems(draft);
+      if (problems.length) throw new Error(problems[0]);
+      if (mine.filter((c) => c.status === 'review').length >= MAX_IN_REVIEW) throw new Error(`you have ${MAX_IN_REVIEW} clips waiting for review already`);
+      const clip: CreatorClip = {
+        id: `u${Date.now().toString(36)}`, title: draft.title.trim(), question: draft.question.trim(), labelA: draft.labelA.trim(), labelB: draft.labelB.trim(),
+        outcome: draft.outcome!, pauseAt: draft.pauseAt, duration: draft.duration, status: 'review', createdAt: Date.now(), plays: 0, staked: 0, earned: 0,
+      };
+      mine = [clip, ...mine];
+      save({ myClips: mine });
+      return clip;
+    },
+    async getMyClips() {
+      // Demo stand-in for the review queue and for other players: a clip passes review after
+      // 30 seconds, then simulated players start calling it and commission comes in.
+      const now = Date.now();
+      if (commissionDay.day !== day()) commissionDay = { day: day(), paid: 0 };
+      let changed = false;
+      mine = mine.map((c) => {
+        let n = c;
+        if (n.status === 'review' && now - n.createdAt > REVIEW_MS) { n = { ...n, status: 'live', liveAt: n.createdAt + REVIEW_MS }; changed = true; }
+        if (n.status !== 'live' || !n.liveAt) return n;
+        const plays = simulatedPlays(n.id, (now - n.liveAt) / 60000);
+        if (plays === n.plays) return n;
+        const take = simulatedTake(n.id, plays);
+        const pay = underCap(commissionDay.paid, take.earned - (n.accrued ?? n.earned));
+        commissionDay.paid += pay;
+        wallet.credit(pay);
+        changed = true;
+        return { ...n, plays, staked: take.staked, accrued: take.earned, earned: n.earned + pay };
+      });
+      if (changed) save({ myClips: mine, commissionDay });
+      return { clips: mine.map(({ accrued, ...c }) => c), balance: wallet.balance };
     },
     async placeBet(clipId, choice, stake) {
       const clip = feed.find((c) => c.id === clipId);
