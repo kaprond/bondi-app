@@ -59,6 +59,13 @@ export function createSupabaseApi(url: string, anonKey: string): BondiApi {
       const { data } = await sb.from('balances').select('coins').maybeSingle();
       return Number(data?.coins ?? 0);
     },
+    async claimMission(id: string) {
+      await ensureSession();
+      const { data, error } = await sb.rpc('claim_mission', { p_mission: id });
+      if (error) throw new Error(error.message);
+      const r = (data as any[])[0];
+      return { balance: Number(r.balance), reward: Number(r.reward) };
+    },
     async placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult> {
       await ensureSession();
       const { data, error } = await sb.rpc('place_bet', { p_clip: clipId, p_choice: choice, p_stake: stake });

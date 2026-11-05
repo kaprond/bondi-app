@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { colors, radius, shadow } from '../theme';
 import { FeedClip, Side, Stake, STAKES } from '../types';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
+import { sfx } from '../sfx';
 
 interface Props {
   clip: FeedClip;
@@ -12,7 +13,7 @@ interface Props {
   onPlace: (choice: Side, stake: Stake) => Promise<void>;
 }
 
-const tap = () => { if (Platform.OS !== 'web') Haptics.selectionAsync(); };
+const tap = () => { sfx.tick(); if (Platform.OS !== 'web') Haptics.selectionAsync(); };
 
 export function BetSheet({ clip, balance, onPlace }: Props) {
   const [choice, setChoice] = useState<Side | null>(null);
@@ -33,6 +34,7 @@ export function BetSheet({ clip, balance, onPlace }: Props) {
     if (!choice) return;
     setBusy(true);
     setError(null);
+    sfx.lock();
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try { await onPlace(choice, stake); } catch (e) { setError((e as Error).message); setBusy(false); }
   }

@@ -11,6 +11,7 @@ import { ResultOverlay } from './ResultOverlay';
 import { T } from './ui';
 import { Avatar } from '../avatar';
 import { friendCalls, nameOf } from '../social';
+import { sfx } from '../sfx';
 
 type Phase = 'teaser' | 'betting' | 'reveal' | 'done';
 
@@ -45,6 +46,7 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
   useEffect(() => {
     const nd = Platform.OS !== 'web';
     if (phase === 'betting') {
+      sfx.pause();
       flash.setValue(0.55);
       Animated.parallel([
         Animated.timing(flash, { toValue: 0, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: nd }),
@@ -75,7 +77,7 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
     const r = await placeBet(clip.id, choice, stake);
     setPick({ side: choice, stake });
     setResult(r);
-    recordResult(r.won, r.payout - stake, { clipId: clip.id, title: clip.title, pick: choice === 'a' ? clip.labelA : clip.labelB });
+    recordResult(r.won, r.payout - stake, { clipId: clip.id, title: clip.title, pick: choice === 'a' ? clip.labelA : clip.labelB, underdog: (choice === 'a' ? clip.oddsA : clip.oddsB) > (choice === 'a' ? clip.oddsB : clip.oddsA) });
     progress.setValue(0);
     await player.replaceAsync(r.revealUrl);
     setPhase('reveal');

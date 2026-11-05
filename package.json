@@ -31,7 +31,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "rm -rf .testbuild && tsc src/challenges.ts --ignoreConfig --outDir .testbuild --module commonjs --target es2020 --skipLibCheck --esModuleInterop --jsx react-jsx && node challenges.test.mjs",
+    "test": "rm -rf .testbuild && tsc src/challenges.ts src/league.ts src/missions.ts --ignoreConfig --outDir .testbuild --module commonjs --target es2020 --skipLibCheck --esModuleInterop --jsx react-jsx && node challenges.test.mjs && node league.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "private": true

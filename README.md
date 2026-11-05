@@ -15,6 +15,11 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
 - **onboarding**: 18+ gate, then "make it yours" profile setup.
 - **daily coins**: a popup each day, 500 on day 1 rising by 100 a day to 1,000 from day 6. Miss a day and it resets.
 - **invite links**: everyone gets their own `BND-XXXX` code. The link opens the app with "@you invited them", both get 500 coins and you're friends straight away.
+- **daily missions**: make 3 calls (+150), call 2 in a row (+200), win on the underdog (+250), brag or invite (+100). They pay out by themselves, once a day.
+- **weekly leagues**: bronze, silver, gold, diamond. 20 players ranked by coins won since Monday, your friends included. Top 5 move up, bottom 5 move down.
+- **brag card**: a 1080×1350 image of your win with your invite link, straight to the share sheet (saved and link copied on desktop).
+- **sounds**: small synthesized effects for the pause, picks, lock-in, win, loss and coins (web, when sound is on).
+- **break reminder**: after 30 minutes of play, a nudge to take a break.
 - **saved progress**: coins, calls, profile, friends, crews and pools survive a refresh (AsyncStorage, localStorage on web) until the Supabase backend is switched on.
 - **web**: link previews (og image), add to home screen (manifest, icons), a phone frame on desktop, and ↑ ↓ / j k to move through the feed.
 
@@ -28,6 +33,10 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
 - `src/components/ProfileScreen.tsx`, `SetupProfile.tsx`: profile, editor, onboarding step
 - `src/persist.ts`: saves the demo stores on the device
 - `src/components/DailyReward.tsx`: the daily coins popup
+- `src/missions.ts`, `src/components/MissionsSheet.tsx`: daily missions
+- `src/league.ts`, `src/leagueState.ts`, `src/components/LeagueScreen.tsx`: weekly leagues
+- `src/brag.ts`: the brag card image, `src/sfx.ts`: sound effects, `src/bus.ts`: app-wide toasts and navigation
+- `src/components/BreakReminder.tsx`: the 30-minute break nudge
 - `public/`: web page template (`index.html` with link previews), manifest, icons, og image
 - `src/api.ts`: `BondiApi`. Uses `src/supabaseApi.ts` when `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set, otherwise an in-memory demo
 - `src/social.ts`, `src/pools.ts`, `src/challenges.ts`, `src/moderation.ts`: demo stores that mirror the SQL
@@ -37,6 +46,7 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
   - `0003_profiles_trigger.sql`: profile and 1,000 coin signup grant
   - `0004_social.sql`: profile fields, friendships, invite codes and redemptions, crews
   - `0005_daily_streak.sql`: daily coins with a day streak (`daily_status`, new `claim_daily`)
+  - `0006_missions.sql`: `claim_mission`, which re-checks each mission against today's bets
 - `supabase/functions/reveal-url`: signed reveal URL, only after the caller has bet
 
 ## Fairness
@@ -50,6 +60,6 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
 ```bash
 npm install
 npx expo start      # Expo Go on a phone, or press w for web
-npm test            # challenge generator + moderation checks
+npm test            # challenge generator, moderation, leagues and missions
 npm run typecheck
 ```

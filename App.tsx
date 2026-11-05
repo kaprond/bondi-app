@@ -10,16 +10,24 @@ import { api, Daily, dailyAmount } from './src/api';
 import { loadSave } from './src/persist';
 import { DailyReward } from './src/components/DailyReward';
 import { shareText } from './src/share';
+import { onBus } from './src/bus';
+import { sfx } from './src/sfx';
+import { dayKey, isDone, MISSIONS } from './src/missions';
+import { markLeagueResultSeen, syncLeague, useLeague } from './src/leagueState';
+import { TIERS } from './src/league';
+import { MissionsSheet } from './src/components/MissionsSheet';
+import { LeagueScreen } from './src/components/LeagueScreen';
+import { BreakReminder } from './src/components/BreakReminder';
 import { ClipCard } from './src/components/ClipCard';
 import { PoolsScreen } from './src/components/PoolsScreen';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { FriendsScreen } from './src/components/FriendsScreen';
 import { SetupProfile } from './src/components/SetupProfile';
-import { befriendInviter, incomingList, inviteCode, inviteLink, syncMyStats, useSocial } from './src/social';
+import { befriendInviter, friendList, incomingList, inviteCode, inviteLink, syncMyStats, useSocial } from './src/social';
 import { H, T } from './src/components/ui';
 import { BarTone, TopBar } from './src/components/TopBar';
 import { Welcome } from './src/components/Welcome';
-import { setSound, useStats } from './src/session';
+import { recordShare, setSound, useStats } from './src/session';
 import { Toast } from './src/components/Toast';
 import { colors, radius } from './src/theme';
 import { FeedClip, Side, Stake } from './src/types';
@@ -57,7 +65,56 @@ function Shell() {
   const { streak } = stats;
   const [setup, setSetup] = useState(false);
   const [poolIntent, setPoolIntent] = useState<{ friendId: string; n: number } | undefined>();
-  useSocial();
+  const social = useSocial();
+  const league = useLeague();
+  const [leagueOpen, setLeagueOpen] = useState(false);
+  const [missionsOpen, setMissionsOpen] = useState(false);
+  const [breakOpen, setBreakOpen] = useState(false);
+  const [claimed, setClaimed] = useState<{ day: string; ids: string[] }>({ day: dayKey(), ids: [] });
+  const claiming = useRef(new Set<string>());
+
+  // toasts, league and missions can be opened from anywhere
+  useEffect(() => onBus((e) => {
+    if (e.kind === 'toast') { setToast({ id: Date.now(), text: e.text }); if (e.coins) sfx.coins(); }
+    if (e.kind === 'league') setLeagueOpen(true);
+    if (e.kind === 'missions') setMissionsOpen(true);
+  }), []);
+
+  // a finished mission pays out by itself (once a day; the server re-checks it)
+  const today = stats.today?.day === dayKey() ? stats.today : null;
+  useEffect(() => {
+    if (!today) return;
+    const ids = claimed.day === today.day ? claimed.ids : [];
+    for (const m of MISSIONS) {
+      if (!isDone(m, today) || ids.includes(m.id) || claiming.current.has(m.id)) continue;
+      claiming.current.add(m.id);
+      api.claimMission(m.id).then((r) => {
+        setBalance(r.balance);
+        setClaimed((c) => ({ day: today.day, ids: [...(c.day === today.day ? c.ids : []), m.id] }));
+        if (r.reward > 0) { setToast({ id: Date.now(), text: `${m.emoji} mission done · +${r.reward} coins` }); sfx.coins(); }
+      }).catch(() => {}).finally(() => claiming.current.delete(m.id));
+    }
+  }, [today, claimed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const missionsDone = today ? MISSIONS.filter((m) => isDone(m, today)).length : 0;
+
+  // your league score and the friends who share your league
+  useEffect(() => { syncLeague(stats.weekWon ?? 0, friendList()); }, [stats.weekWon, social]);
+  useEffect(() => {
+    const l = league.last;
+    if (!l || l.seen) return;
+    const t = TIERS[l.to];
+    setToast({ id: Date.now(), text: l.to > l.from ? `last week #${l.rank}: up to ${t.name} ${t.emoji}` : l.to < l.from ? `last week #${l.rank}: down to ${t.name}. bounce back` : `last week #${l.rank}: staying in ${t.name} ${t.emoji}` });
+    markLeagueResultSeen();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the 30-minute break reminder promised on the profile
+  const [breakKey, setBreakKey] = useState(0);
+  useEffect(() => {
+    if (ageOk !== true || setup) return;
+    const t = setTimeout(() => setBreakOpen(true), 30 * 60 * 1000);
+    return () => clearTimeout(t);
+  }, [ageOk, setup, breakKey]);
+
   useEffect(() => { syncMyStats({ calls: stats.bets, hitRate: stats.bets ? Math.round((stats.wins / stats.bets) * 100) : 0, bestStreak: stats.bestStreak }); }, [stats]);
 
   useEffect(() => {
@@ -106,7 +163,7 @@ function Shell() {
     setBalance(r.balance);
     setDaily({ claimed: true, dayStreak: r.dayStreak, amount: r.amount || dailyAmount(r.dayStreak) });
     setShowDaily(false);
-    if (r.amount > 0) setToast({ id: Date.now(), text: `+${r.amount} coins landed. let’s goooo` });
+    if (r.amount > 0) { setToast({ id: Date.now(), text: `+${r.amount} coins landed. let’s goooo` }); sfx.coins(); }
   };
 
   const welcomeDone = async () => {
@@ -135,7 +192,8 @@ function Shell() {
     </View>
   );
 
-  const renderBar = (tone: BarTone) => <TopBar tone={tone} topInset={insets.top} balance={balance} streak={streak} onCoins={() => setTab('me')} />;
+  const renderBar = (tone: BarTone) => <TopBar tone={tone} topInset={insets.top} balance={balance} streak={streak} onCoins={() => setTab('me')}
+    missions={{ done: missionsDone, total: MISSIONS.length }} onMissions={() => setMissionsOpen(true)} />;
   const next = (i: number) => { if (i + 1 < feed.length) listRef.current?.scrollToIndex({ index: i + 1 }); else setActiveIndex(feed.length); };
 
   return (
@@ -156,20 +214,24 @@ function Shell() {
               viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
               getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
               renderItem={({ item, index }) => (
-                <ClipCard clip={item} active={tab === 'feed' && index === activeIndex && !showDaily} height={height} topInset={insets.top}
+                <ClipCard clip={item} active={tab === 'feed' && index === activeIndex && !showDaily && !leagueOpen && !missionsOpen && !breakOpen} height={height} topInset={insets.top}
                   balance={balance} placeBet={placeBet} onNext={() => next(index)} />
               )}
               ListFooterComponent={<FeedEnd height={height} onPools={() => setTab('pools')} onInvite={async () => {
                 const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. we both get 500 coins.`, inviteLink());
+                if (r !== 'dismissed') recordShare();
                 if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
               }} />}
             />
           )}
         </View>
 
-        {toast && <Toast id={toast.id} text={toast.text} top={insets.top + 64} onDone={clearToast} />}
         {tab === 'feed' && <View style={styles.header} pointerEvents="box-none">{renderBar('media')}</View>}
         {showDaily && daily && !daily.claimed && <DailyReward daily={daily} onClaim={claim} onLater={() => setShowDaily(false)} />}
+        {missionsOpen && <MissionsSheet claimed={claimed.day === dayKey() ? claimed.ids : []} onClose={() => setMissionsOpen(false)} />}
+        {leagueOpen && <LeagueScreen topInset={insets.top} onClose={() => setLeagueOpen(false)} />}
+        {breakOpen && <BreakReminder onDone={() => { setBreakOpen(false); setBreakKey((k) => k + 1); }} />}
+        {toast && <Toast key={toast.id} id={toast.id} text={toast.text} top={insets.top + 64} onDone={clearToast} />}
       </View>
 
       <View style={[styles.tabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
