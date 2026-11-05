@@ -1,8 +1,11 @@
 import { Platform } from 'react-native';
 
-// Synthetic demo clips (generated, no third-party rights). Real clips come from the admin pipeline.
+// a1–a4: AI-generated clips (ElevenLabs), owned by Bondi. c2–c8: synthetic demo clips. Real clips come from the admin pipeline.
 const native: Record<string, number> = {
-  'c1-teaser': require('../assets/clips/c1-teaser.mp4'), 'c1-reveal': require('../assets/clips/c1-reveal.mp4'),
+  'a1-teaser': require('../assets/clips/a1-teaser.mp4'), 'a1-reveal': require('../assets/clips/a1-reveal.mp4'),
+  'a2-teaser': require('../assets/clips/a2-teaser.mp4'), 'a2-reveal': require('../assets/clips/a2-reveal.mp4'),
+  'a3-teaser': require('../assets/clips/a3-teaser.mp4'), 'a3-reveal': require('../assets/clips/a3-reveal.mp4'),
+  'a4-teaser': require('../assets/clips/a4-teaser.mp4'), 'a4-reveal': require('../assets/clips/a4-reveal.mp4'),
   'c2-teaser': require('../assets/clips/c2-teaser.mp4'), 'c2-reveal': require('../assets/clips/c2-reveal.mp4'),
   'c3-teaser': require('../assets/clips/c3-teaser.mp4'), 'c3-reveal': require('../assets/clips/c3-reveal.mp4'),
   'c4-teaser': require('../assets/clips/c4-teaser.mp4'), 'c4-reveal': require('../assets/clips/c4-reveal.mp4'),

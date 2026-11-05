@@ -27,7 +27,10 @@ import { onHydrate, save } from './persist';
 import { dayKey, MISSIONS } from './missions';
 const secret = (outcome: Side, salt: string, id: string) => ({ outcome, salt, revealUrl: demoClip(`${id}-reveal`) });
 const privateClips: Record<string, { outcome: Side; salt: string; revealUrl: string | number }> = {
-  c1: secret('a', 'bnd-2f22765d0493', 'c1'),
+  a1: secret('a', 'bnd-bdf7779d7f33', 'a1'),
+  a2: secret('b', 'bnd-f04b3ac14e2b', 'a2'),
+  a3: secret('b', 'bnd-b56ad1882801', 'a3'),
+  a4: secret('a', 'bnd-b0557c56dec6', 'a4'),
   c2: secret('b', 'bnd-6b1f53303a73', 'c2'),
   c3: secret('a', 'bnd-a625406f6977', 'c3'),
   c4: secret('b', 'bnd-a6724d377c53', 'c4'),
@@ -38,7 +41,10 @@ const privateClips: Record<string, { outcome: Side; salt: string; revealUrl: str
 };
 const O = '@bondi.originals';
 const feed: FeedClip[] = [
-  { id: 'c1', title: 'cup shot from the balcony', creator: O, question: 'does it land in the cup?', labelA: 'lands it', labelB: 'misses', oddsA: 1.85, oddsB: 2.1, crowdA: 58, teaserUrl: demoClip('c1-teaser'), commitHash: '061e5cffc840422cc8ea8528ec3a5c9d37ded7f5f95cc12b1dba9847e8ad3491' },
+  { id: 'a1', title: 'canal-side cup toss', creator: '@grachten.gang', question: 'does it land in the cup?', labelA: 'in the cup', labelB: 'misses', oddsA: 2.6, oddsB: 1.45, crowdA: 36, teaserUrl: demoClip('a1-teaser'), commitHash: 'ef85922984f5cd07302bdb895bc3ea17c2249c52d2256c55b035f88195971ee2' },
+  { id: 'a2', title: 'the big stair set', creator: '@concrete.kid', question: 'does he roll away clean?', labelA: 'lands it', labelB: 'bails', oddsA: 1.95, oddsB: 1.85, crowdA: 61, teaserUrl: demoClip('a2-teaser'), commitHash: '7f4572e88d238df29ed8804985de9ad5941780be9ad146b765ee28d6787b77cc' },
+  { id: 'a3', title: 'pumpkin vs the counter', creator: '@pumpkin.the.cat', question: 'does the cat pull itself up?', labelA: 'makes it', labelB: 'drops', oddsA: 1.8, oddsB: 2.0, crowdA: 57, teaserUrl: demoClip('a3-teaser'), commitHash: '45a1466855f3aab56e471023354ef8479b9dd32238c6e51c9575d847039ef387' },
+  { id: 'a4', title: 'half-court at golden hour', creator: '@rooftop.hoops', question: 'is it going in?', labelA: 'buckets', labelB: 'miss', oddsA: 3.4, oddsB: 1.3, crowdA: 24, teaserUrl: demoClip('a4-teaser'), commitHash: '9ca4a15c3a2afab8717e6ed1e2345d24e3e58ecedfcc2406e1a47d4ce699d80b' },
   { id: 'c4', title: 'penalty in the park', creator: '@vondelpark.fc', question: 'does the keeper save it?', labelA: 'saved', labelB: 'goal', oddsA: 2.2, oddsB: 1.65, crowdA: 38, teaserUrl: demoClip('c4-teaser'), commitHash: 'f99663638c79dfb45a01da2f8d6a99dcfd17db91a05c5cb5ad5a7c7466e4905a' },
   { id: 'c2', title: 'the slow slide', creator: O, question: 'does it stop in time?', labelA: 'stops on the edge', labelB: 'slides off', oddsA: 1.9, oddsB: 1.9, crowdA: 71, teaserUrl: demoClip('c2-teaser'), commitHash: 'a1a6d4f722307e4091dd177ccefb969c7770632d5d0fca4f30f4cad88635b61b' },
   { id: 'c6', title: 'running for tram 2', creator: '@late.again', question: 'do they make the tram?', labelA: 'makes it', labelB: 'doors shut', oddsA: 1.9, oddsB: 1.9, crowdA: 47, teaserUrl: demoClip('c6-teaser'), commitHash: 'b142e378f6c3aab6ec15dc0ab85b7597b7c7f2eb4809ac3ebcc5c9893f910e41' },
