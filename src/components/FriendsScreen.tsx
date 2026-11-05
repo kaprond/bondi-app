@@ -3,6 +3,9 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../avatar';
 import { shareText } from '../share';
+import { recordShare } from '../session';
+import { openLeague } from '../bus';
+import { LeagueCard } from './LeagueScreen';
 import {
   AVATAR_EMOJI, cancelRequest, createCrew, crewList, friendList, incomingList, inviteCode, inviteLink, me, ME, nameOf,
   Person, relation, respond, search, sendRequest, suggestions, useSocial,
@@ -26,6 +29,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
   async function invite() {
     const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink());
     setCopied(r === 'copied' ? 'link copied' : r === 'shared' ? 'sent!' : null);
+    if (r !== 'dismissed') recordShare();
     if (r !== 'dismissed') setTimeout(() => setCopied(null), 2000);
   }
 
@@ -50,6 +54,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
         </View>
 
         <View style={styles.body}>
+          <LeagueCard onPress={openLeague} />
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color={colors.muted} />
             <TextInput value={q} onChangeText={setQ} placeholder="find people by @handle" placeholderTextColor={colors.muted}

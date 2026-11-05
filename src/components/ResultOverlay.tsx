@@ -8,7 +8,12 @@ import { BetResult, FeedClip } from '../types';
 import { Coin, H, PillButton, T } from './ui';
 import { Confetti } from './Confetti';
 import { CountUp } from './CountUp';
-import { shareText } from '../share';
+import { shareBrag } from '../brag';
+import { recordShare } from '../session';
+import { sfx } from '../sfx';
+import { toast, openLeague } from '../bus';
+import { useLeague } from '../leagueState';
+import { standings, TIERS } from '../league';
 import { friendCalls, inviteCode, inviteLink, nameOf } from '../social';
 import { Avatar } from '../avatar';
 
@@ -26,8 +31,20 @@ export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }:
   const names = (xs: { id: string }[]) => xs.length === 1 ? nameOf(xs[0].id) : `${xs.slice(0, -1).map((x) => nameOf(x.id)).join(', ')} and ${nameOf(xs[xs.length - 1].id)}`;
   const friendLine = !fc.length ? null : !right.length ? `none of your friends saw that coming` : !wrong.length ? `${names(right)} called it too` : `${names(right)} called it. ${names(wrong)} didn’t`;
   const crowdLine = crowd < 40 ? `only ${crowd}% saw that coming` : `${crowd}% of players called it`;
+  const lg = useLeague();
+  const rank = standings({ myWon: lg.myWon, tier: lg.tier, friends: lg.friends }).find((r) => r.you)!.rank;
+
+  async function brag() {
+    const r = await shareBrag({ question: clip.question, answer: label, net, crowd, streak, link: inviteLink(),
+      text: `called it on bondi: “${clip.question}” → “${label}”. +${net} coins. bet you can’t. code ${inviteCode()}` });
+    if (r === 'dismissed') return;
+    recordShare();
+    if (r === 'saved') toast('brag card saved, link copied');
+    else if (r === 'copied') toast('brag copied');
+  }
 
   useEffect(() => {
+    if (result.won) sfx.win(); else sfx.lose();
     if (Platform.OS !== 'web') Haptics.notificationAsync(result.won ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning);
     Animated.spring(pop, { toValue: 1, useNativeDriver: Platform.OS !== 'web', damping: 11, stiffness: 180 }).start();
   }, [pop, result.won]);
@@ -61,16 +78,21 @@ export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }:
             <T size={13} weight="semi" color={result.won ? colors.white : colors.deep} style={{ flexShrink: 1 }}>{friendLine}</T>
           </View>
         )}
-        {result.won && streak > 1 && (
-          <View style={styles.streak}><T weight="bold" color={colors.deep}>🔥 {streak} in a row</T></View>
-        )}
+        <View style={styles.chips}>
+          {result.won && streak > 1 && (
+            <View style={styles.streak}><T weight="bold" color={colors.deep}>🔥 {streak} in a row</T></View>
+          )}
+          <Pressable onPress={openLeague} style={[styles.league, { backgroundColor: result.won ? 'rgba(255,255,255,0.16)' : colors.tint }]} accessibilityRole="button" accessibilityLabel="open your league">
+            <T size={13} weight="bold" color={result.won ? colors.white : colors.deep}>{TIERS[lg.tier].emoji} #{rank} in {TIERS[lg.tier].name} league</T>
+          </Pressable>
+        </View>
         <PillButton label="next clip" variant={result.won ? 'white' : 'brand'} onPress={onNext} style={{ alignSelf: 'stretch' }}
           icon={<Ionicons name="arrow-down" size={18} color={result.won ? colors.brand : colors.white} />} />
         <View style={styles.links}>
           <Pressable onPress={onReplay} accessibilityRole="button"><T weight="bold" size={14} color={result.won ? colors.white : colors.brand}>watch again</T></Pressable>
           {result.won && (
-            <Pressable onPress={() => shareText(`called it on bondi: “${clip.title}” went “${label}”. +${net} coins. bet you can’t. code ${inviteCode()}`, inviteLink())} accessibilityRole="button">
-              <T weight="bold" size={14} color={colors.white}>brag</T>
+            <Pressable onPress={brag} accessibilityRole="button" accessibilityLabel="brag">
+              <T weight="bold" size={14} color={colors.white}>brag 📸</T>
             </Pressable>
           )}
           <Pressable onPress={() => setProof((p) => !p)} accessibilityRole="button"><T weight="bold" size={14} color={result.won ? colors.white : colors.brand}>{proof ? 'hide proof' : 'check it was fair'}</T></Pressable>
@@ -93,6 +115,8 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.sheet, padding: 20, gap: 10, alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.7)', ...shadow.soft },
   badge: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   amount: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
+  league: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 4 },
   streak: { backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 4 },
   crowd: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 },
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },

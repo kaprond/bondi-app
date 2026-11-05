@@ -11,6 +11,8 @@ export interface BondiApi {
   /** New players only. Both sides get 500 coins and become friends. Returns the new balance. */
   redeemInvite(code: string): Promise<number>;
   placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult>;
+  /** Pays a finished daily mission once per day. The server re-checks the mission against your bets. */
+  claimMission(id: string): Promise<{ balance: number; reward: number }>;
 }
 
 /** Daily reward grows with the day streak: 500 on day 1, +100 a day, capped at 1,000 from day 6. */
@@ -22,6 +24,7 @@ export const dailyAmount = (dayStreak: number) => 500 + 100 * (Math.min(Math.max
  */
 import { demoClip } from './demoClips';
 import { onHydrate, save } from './persist';
+import { dayKey, MISSIONS } from './missions';
 const secret = (outcome: Side, salt: string, id: string) => ({ outcome, salt, revealUrl: demoClip(`${id}-reveal`) });
 const privateClips: Record<string, { outcome: Side; salt: string; revealUrl: string | number }> = {
   c1: secret('a', 'bnd-2f22765d0493', 'c1'),
@@ -59,6 +62,7 @@ export function createMockApi(): BondiApi {
   let lastDaily = '';
   let dayStreak = 0;
   let redeemed = false;
+  let missions: { day: string; ids: string[] } = { day: '', ids: [] };
   const played = new Set<string>();
   onHydrate((d) => {
     if (typeof d.balance === 'number') wallet.balance = d.balance;
@@ -66,6 +70,7 @@ export function createMockApi(): BondiApi {
     if (typeof d.lastDaily === 'string') lastDaily = d.lastDaily;
     if (typeof d.dayStreak === 'number') dayStreak = d.dayStreak;
     redeemed = d.redeemed === true;
+    if (d.missions) missions = d.missions as typeof missions;
   });
   const streakIfClaimedToday = () => (lastDaily === day(-1) ? dayStreak + 1 : 1);
   return {
@@ -92,6 +97,16 @@ export function createMockApi(): BondiApi {
       save({ redeemed });
       wallet.credit(500);
       return wallet.balance;
+    },
+    async claimMission(id) {
+      const m = MISSIONS.find((x) => x.id === id);
+      if (!m) throw new Error('unknown mission');
+      if (missions.day !== dayKey()) missions = { day: dayKey(), ids: [] };
+      if (missions.ids.includes(id)) return { balance: wallet.balance, reward: 0 };
+      missions = { ...missions, ids: [...missions.ids, id] };
+      save({ missions });
+      wallet.credit(m.reward);
+      return { balance: wallet.balance, reward: m.reward };
     },
     async placeBet(clipId, choice, stake) {
       const clip = feed.find((c) => c.id === clipId);

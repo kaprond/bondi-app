@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../avatar';
-import { useStats } from '../session';
+import { recordShare, useStats } from '../session';
+import { openLeague } from '../bus';
+import { LeagueCard } from './LeagueScreen';
 import { Daily, dailyAmount } from '../api';
 import { shareText } from '../share';
 import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLink, me, updateProfile, useSocial } from '../social';
@@ -71,6 +73,8 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }:
           ))}
         </View>
 
+        <LeagueCard onPress={openLeague} />
+
         <View style={styles.card}>
           <View style={styles.between}><Eyebrow label="badges" /><T size={13} color={colors.muted}>{got} of {badges.length}</T></View>
           <View style={styles.badges}>
@@ -101,7 +105,7 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }:
           ))}
         </View>
 
-        <Pressable onPress={() => shareText(`come play bondi with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())} style={styles.invite} accessibilityRole="button">
+        <Pressable onPress={async () => { if ((await shareText(`come play bondi with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
           <T size={30}>💌</T>
           <View style={{ flex: 1 }}>
             <T weight="bold" color={colors.white}>invite friends, get 500 coins each</T>
