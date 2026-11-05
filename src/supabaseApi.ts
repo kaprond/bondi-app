@@ -38,11 +38,26 @@ export function createSupabaseApi(url: string, anonKey: string): BondiApi {
       const { data } = await sb.from('balances').select('coins').maybeSingle();
       return Number(data?.coins ?? 0);
     },
+    async getDaily() {
+      await ensureSession();
+      const { data, error } = await sb.rpc('daily_status');
+      if (error) throw error;
+      const r = (data as any[])[0];
+      return { claimed: Boolean(r.claimed), dayStreak: Number(r.day_streak), amount: Number(r.amount) };
+    },
     async claimDaily() {
       await ensureSession();
       const { data, error } = await sb.rpc('claim_daily');
       if (error) throw error;
-      return Number(data);
+      const r = (data as any[])[0];
+      return { balance: Number(r.balance), amount: Number(r.amount), dayStreak: Number(r.day_streak) };
+    },
+    async redeemInvite(code: string) {
+      await ensureSession();
+      const { error } = await sb.rpc('redeem_invite', { p_code: code });
+      if (error) throw new Error(error.message);
+      const { data } = await sb.from('balances').select('coins').maybeSingle();
+      return Number(data?.coins ?? 0);
     },
     async placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult> {
       await ensureSession();

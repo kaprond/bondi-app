@@ -13,6 +13,10 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
 - **friends**: invite code and share link (both get 500 coins), search by @handle, friend requests, people you might know, crews, a leaderboard of your sharpest friends, and a profile sheet per person.
 - **me**: emoji avatar and colour, name, @handle, city, bio, coin balance with the daily 500, stats, badges, recent calls.
 - **onboarding**: 18+ gate, then "make it yours" profile setup.
+- **daily coins**: a popup each day, 500 on day 1 rising by 100 a day to 1,000 from day 6. Miss a day and it resets.
+- **invite links**: everyone gets their own `BND-XXXX` code. The link opens the app with "@you invited them", both get 500 coins and you're friends straight away.
+- **saved progress**: coins, calls, profile, friends, crews and pools survive a refresh (AsyncStorage, localStorage on web) until the Supabase backend is switched on.
+- **web**: link previews (og image), add to home screen (manifest, icons), a phone frame on desktop, and ↑ ↓ / j k to move through the feed.
 
 ## Code map
 
@@ -22,6 +26,9 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
 - `src/components/PoolsScreen.tsx`: pool list, challenge card, create pool, pool detail
 - `src/components/FriendsScreen.tsx`, `PersonSheet.tsx`: friends, requests, crews, invite
 - `src/components/ProfileScreen.tsx`, `SetupProfile.tsx`: profile, editor, onboarding step
+- `src/persist.ts`: saves the demo stores on the device
+- `src/components/DailyReward.tsx`: the daily coins popup
+- `public/`: web page template (`index.html` with link previews), manifest, icons, og image
 - `src/api.ts`: `BondiApi`. Uses `src/supabaseApi.ts` when `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set, otherwise an in-memory demo
 - `src/social.ts`, `src/pools.ts`, `src/challenges.ts`, `src/moderation.ts`: demo stores that mirror the SQL
 - `supabase/migrations/`
@@ -29,6 +36,7 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
   - `0002_friend_pools.sql`: groups, pools, consent, conflict rule, confirm or dispute, refunds
   - `0003_profiles_trigger.sql`: profile and 1,000 coin signup grant
   - `0004_social.sql`: profile fields, friendships, invite codes and redemptions, crews
+  - `0005_daily_streak.sql`: daily coins with a day streak (`daily_status`, new `claim_daily`)
 - `supabase/functions/reveal-url`: signed reveal URL, only after the caller has bet
 
 ## Fairness

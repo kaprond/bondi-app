@@ -9,7 +9,7 @@ import { Coin, H, PillButton, T } from './ui';
 import { Confetti } from './Confetti';
 import { CountUp } from './CountUp';
 import { shareText } from '../share';
-import { friendCalls, INVITE_CODE, inviteLink, nameOf } from '../social';
+import { friendCalls, inviteCode, inviteLink, nameOf } from '../social';
 import { Avatar } from '../avatar';
 
 interface Props { clip: FeedClip; result: BetResult; stake: number; streak: number; onNext: () => void; onReplay: () => void }
@@ -69,7 +69,7 @@ export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }:
         <View style={styles.links}>
           <Pressable onPress={onReplay} accessibilityRole="button"><T weight="bold" size={14} color={result.won ? colors.white : colors.brand}>watch again</T></Pressable>
           {result.won && (
-            <Pressable onPress={() => shareText(`called it on bondi: “${clip.title}” went “${label}”. +${net} coins. bet you can’t. code ${INVITE_CODE}`, inviteLink)} accessibilityRole="button">
+            <Pressable onPress={() => shareText(`called it on bondi: “${clip.title}” went “${label}”. +${net} coins. bet you can’t. code ${inviteCode()}`, inviteLink())} accessibilityRole="button">
               <T weight="bold" size={14} color={colors.white}>brag</T>
             </Pressable>
           )}

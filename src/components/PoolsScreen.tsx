@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { wallet } from '../api';
+import { onHydrate, save } from '../persist';
 import { Avatar } from '../avatar';
 import { CATEGORIES, Challenge, randomChallenge } from '../challenges';
 import { blockedTopic } from '../moderation';
@@ -11,7 +12,8 @@ import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 
-const store = createPoolsStore(wallet.debit, wallet.credit);
+const store = createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
+onHydrate((d) => { if (Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
 const STAKES = [10, 50, 100, 250];
 type Draft = Challenge & { crew: string };
 type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string };
