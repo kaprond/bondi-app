@@ -44,5 +44,13 @@
     <noscript>bondi needs JavaScript to run.</noscript>
     <div id="root"></div>
     <div id="desk-hint">↑ ↓ to scroll clips · best on your phone</div>
+    <script>
+      // keep the install prompt for src/install.ts (it fires before the app has loaded)
+      window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__bondiInstall = e; });
+      window.addEventListener('appinstalled', function () { window.__bondiInstall = null; });
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });
+      }
+    </script>
   </body>
 </html>
