@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -12,11 +12,17 @@ import { T } from './ui';
 import { Avatar } from '../avatar';
 import { friendCalls, nameOf } from '../social';
 import { sfx } from '../sfx';
+import { Dare, dareLink, dareName } from '../dare';
+import { shareText } from '../share';
+import { recordShare } from '../session';
+import { toast } from '../bus';
 
 type Phase = 'teaser' | 'betting' | 'reveal' | 'done';
 
 interface Props {
   clip: FeedClip;
+  /** Set when a friend's dare link opened this clip. */
+  dare?: Dare;
   active: boolean;
   height: number;
   topInset: number;
@@ -29,7 +35,7 @@ interface Props {
  * Teaser plays to the pause point, then the bet sheet opens.
  * The reveal source only exists after placeBet returns, so the app cannot leak the outcome.
  */
-export function ClipCard({ clip, active, height, topInset, balance, placeBet, onNext }: Props) {
+export function ClipCard({ clip, dare, active, height, topInset, balance, placeBet, onNext }: Props) {
   const [phase, setPhase] = useState<Phase>('teaser');
   const [result, setResult] = useState<BetResult | null>(null);
   const [pick, setPick] = useState<{ side: Side; stake: Stake } | null>(null);
@@ -41,6 +47,28 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
   const player = useVideoPlayer(clip.teaserUrl, (p) => { p.loop = false; p.muted = true; p.timeUpdateEventInterval = 0.1; });
 
   useEffect(() => { player.muted = !soundOn; }, [player, soundOn]);
+
+  // Web: the clip's first frame sits on top until the video has actually started, so a slow
+  // connection shows a still instead of a dark screen.
+  const poster = posterFor(clip);
+  const posterFade = useRef(new Animated.Value(1)).current;
+  const [posterGone, setPosterGone] = useState(!poster);
+  useEffect(() => {
+    if (!poster) return;
+    const sub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (currentTime < 0.05) return;
+      sub.remove();
+      Animated.timing(posterFade, { toValue: 0, duration: 160, useNativeDriver: Platform.OS !== 'web' }).start(() => setPosterGone(true));
+    });
+    return () => sub.remove();
+  }, [player, poster, posterFade]);
+
+  async function sendDare() {
+    const r = await shareText(`can you call this one? “${clip.question}” 👀 free coins, no cash`, dareLink(clip.id, pick?.side));
+    if (r === 'dismissed') return;
+    recordShare();
+    if (r === 'copied') toast('dare link copied. send it to a friend');
+  }
 
   // The pause moment: a quick white flash, then the frame dims behind the bet sheet.
   useEffect(() => {
@@ -97,6 +125,11 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
   return (
     <View style={{ height, backgroundColor: colors.deep }}>
       <VideoView player={player} style={styles.video} contentFit="cover" nativeControls={false} />
+      {poster && !posterGone && (
+        <Animated.View style={[styles.video, { opacity: posterFade }]} pointerEvents="none">
+          <Image source={{ uri: poster }} style={styles.video} resizeMode="cover" accessibilityIgnoresInvertColors />
+        </Animated.View>
+      )}
       <LinearGradient colors={['rgba(0,40,50,0.55)', 'transparent']} style={[styles.topFade, { height: topInset + 90 }]} pointerEvents="none" />
       <LinearGradient colors={['transparent', 'rgba(0,40,50,0.75)']} style={styles.bottomFade} pointerEvents="none" />
 
@@ -105,6 +138,11 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
 
       <Pressable onPress={() => setSound(!soundOn)} style={[styles.sound, { top: topInset + 72 }]} accessibilityRole="button" accessibilityLabel={soundOn ? 'mute' : 'unmute'} hitSlop={10}>
         <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color={colors.white} />
+      </Pressable>
+
+      <Pressable onPress={sendDare} style={[styles.dareBtn, { top: topInset + 116 }]} accessibilityRole="button" accessibilityLabel="dare a friend with this clip" hitSlop={10}>
+        <Ionicons name="paper-plane" size={17} color={colors.white} />
+        <T size={10} weight="bold" color={colors.white}>dare</T>
       </Pressable>
 
       <View style={[styles.progressTrack, { top: topInset + 58 }]}>
@@ -122,6 +160,9 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
         <View style={styles.caption} pointerEvents="none">
           <T weight="bold" size={15} color={colors.white}>{clip.creator}</T>
           <T weight="semi" size={15} color={colors.white}>{clip.title}</T>
+          {phase === 'teaser' && dare && (
+            <View style={styles.dare}><T weight="bold" size={13} color={colors.deep}>🎯 {dareName(dare)} dared you. can you call it?</T></View>
+          )}
           {phase === 'teaser' && played.length > 0 && (
             <View style={styles.friends}>
               <View style={{ flexDirection: 'row' }}>{played.slice(0, 3).map((f, i) => <View key={f.id} style={{ marginLeft: i ? -7 : 0 }}><Avatar id={f.id} size={22} /></View>)}</View>
@@ -136,13 +177,21 @@ export function ClipCard({ clip, active, height, topInset, balance, placeBet, on
 
       {phase === 'betting' && <BetSheet clip={clip} balance={balance} onPlace={onPlace} />}
       {phase === 'done' && result && pick && (
-        <ResultOverlay clip={clip} result={result} stake={pick.stake} streak={streak} onNext={onNext} onReplay={replay} />
+        <ResultOverlay clip={clip} result={result} stake={pick.stake} streak={streak} dare={dare} onDare={sendDare} onNext={onNext} onReplay={replay} />
       )}
     </View>
   );
 }
 
+/** Bundled demo clips have a first-frame poster in public/posters (scripts/og-cards.py). */
+function posterFor(clip: FeedClip): string | null {
+  if (Platform.OS !== 'web' || typeof clip.teaserUrl !== 'string') return null;
+  return clip.teaserUrl.startsWith('clips/') ? `posters/${clip.id}.jpg` : null;
+}
+
 const styles = StyleSheet.create({
+  dareBtn: { position: 'absolute', right: 16, width: 36, height: 44, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,40,50,0.45)' },
+  dare: { alignSelf: 'flex-start', backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginBottom: 2 },
   video: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
   topFade: { position: 'absolute', left: 0, right: 0, top: 0 },
   bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 220 },
