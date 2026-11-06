@@ -20,6 +20,8 @@ import { LeagueScreen } from './src/components/LeagueScreen';
 import { BreakReminder } from './src/components/BreakReminder';
 import { ClipCard } from './src/components/ClipCard';
 import { PoolsScreen } from './src/components/PoolsScreen';
+import { CreatorScreen } from './src/components/CreatorScreen';
+import { refreshCreator } from './src/creatorState';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { FriendsScreen } from './src/components/FriendsScreen';
 import { SetupProfile } from './src/components/SetupProfile';
@@ -32,7 +34,7 @@ import { Toast } from './src/components/Toast';
 import { colors, radius } from './src/theme';
 import { FeedClip, Side, Stake } from './src/types';
 
-type Tab = 'feed' | 'pools' | 'friends' | 'me';
+type Tab = 'feed' | 'pools' | 'create' | 'friends' | 'me';
 const AGE_KEY = 'bondi.ageConfirmed';
 
 export default function App() {
@@ -114,6 +116,15 @@ function Shell() {
     const t = setTimeout(() => setBreakOpen(true), 30 * 60 * 1000);
     return () => clearTimeout(t);
   }, [ageOk, setup, breakKey]);
+
+  // commission from people calling your uploaded clips comes in while you play
+  useEffect(() => {
+    if (ageOk !== true) return;
+    const tick = () => { refreshCreator().then(setBalance).catch(() => {}); };
+    tick();
+    const t = setInterval(tick, 20_000);
+    return () => clearInterval(t);
+  }, [ageOk]);
 
   useEffect(() => { syncMyStats({ calls: stats.bets, hitRate: stats.bets ? Math.round((stats.wins / stats.bets) * 100) : 0, bestStreak: stats.bestStreak }); }, [stats]);
 
@@ -200,6 +211,7 @@ function Shell() {
     <View style={styles.root}>
       <View style={{ flex: 1 }}>
         {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} onBalance={async () => setBalance(await api.getBalance())} />}
+        {tab === 'create' && <CreatorScreen renderBar={renderBar} onBalance={setBalance} />}
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} />}
         <View style={[{ flex: 1 }, tab !== 'feed' && { display: 'none' }]} onLayout={(e: LayoutChangeEvent) => setHeight(e.nativeEvent.layout.height)}>
@@ -217,7 +229,7 @@ function Shell() {
                 <ClipCard clip={item} active={tab === 'feed' && index === activeIndex && !showDaily && !leagueOpen && !missionsOpen && !breakOpen} height={height} topInset={insets.top}
                   balance={balance} placeBet={placeBet} onNext={() => next(index)} />
               )}
-              ListFooterComponent={<FeedEnd height={height} onPools={() => setTab('pools')} onInvite={async () => {
+              ListFooterComponent={<FeedEnd height={height} onPools={() => setTab('pools')} onCreate={() => setTab('create')} onInvite={async () => {
                 const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. we both get 500 coins.`, inviteLink());
                 if (r !== 'dismissed') recordShare();
                 if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
@@ -235,7 +247,7 @@ function Shell() {
       </View>
 
       <View style={[styles.tabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        {([['feed', 'for you', 'play-circle'], ['pools', 'pools', 'trophy'], ['friends', 'friends', 'people'], ['me', 'me', 'person-circle']] as const).map(([key, label, icon]) => {
+        {([['feed', 'for you', 'play-circle'], ['pools', 'pools', 'trophy'], ['create', 'post', 'add-circle'], ['friends', 'friends', 'people'], ['me', 'me', 'person-circle']] as const).map(([key, label, icon]) => {
           const on = tab === key;
           const dot = key === 'friends' ? incomingList().length : 0;
           return (
@@ -251,7 +263,7 @@ function Shell() {
   );
 }
 
-function FeedEnd({ height, onPools, onInvite }: { height: number; onPools: () => void; onInvite: () => void }) {
+function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPools: () => void; onCreate: () => void; onInvite: () => void }) {
   return (
     <View style={[styles.end, { height }]}>
       <T size={44}>🛵</T>
@@ -259,6 +271,7 @@ function FeedEnd({ height, onPools, onInvite }: { height: number; onPools: () =>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips drop every day at 18:00. until then, pull your friends in. you both get 500 coins.</T>
       <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +500 each</T></Pressable>
       <Pressable onPress={onPools} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>start a friend pool</T></Pressable>
+      <Pressable onPress={onCreate} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>post your own clip · earn coins</T></Pressable>
     </View>
   );
 }

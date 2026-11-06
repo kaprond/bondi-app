@@ -3,6 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { BondiApi } from './api';
 import { BetResult, FeedClip, Side, Stake } from './types';
+import { ClipDraft, CreatorClip, draftProblems } from './creator';
+
+const toCreatorClip = (r: any): CreatorClip => ({
+  id: r.id, title: r.title, question: r.question, labelA: r.label_a, labelB: r.label_b, outcome: r.outcome,
+  pauseAt: Number(r.pause_at), duration: Number(r.duration), status: r.status === 'live' ? 'live' : r.status === 'rejected' ? 'rejected' : 'review',
+  reason: r.rejection_reason ?? undefined, createdAt: Date.parse(r.created_at), liveAt: r.committed_at ? Date.parse(r.committed_at) : undefined,
+  plays: Number(r.plays), staked: Number(r.staked ?? 0), earned: Number(r.earned ?? 0),
+});
 
 /**
  * Real backend. Requires EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY,
@@ -65,6 +73,33 @@ export function createSupabaseApi(url: string, anonKey: string): BondiApi {
       if (error) throw new Error(error.message);
       const r = (data as any[])[0];
       return { balance: Number(r.balance), reward: Number(r.reward) };
+    },
+    async submitClip(draft: ClipDraft, video: { uri: string; mimeType?: string }) {
+      await ensureSession();
+      const problems = draftProblems(draft);
+      if (problems.length) throw new Error(problems[0]);
+      const { data: u } = await sb.auth.getUser();
+      if (!u.user) throw new Error('not signed in');
+      // Private bucket; only the review pipeline can read it. It cuts teaser and reveal at pause_at.
+      const path = `${u.user.id}/${Date.now()}.mp4`;
+      const body = await (await fetch(video.uri)).blob();
+      const up = await sb.storage.from('creator-uploads').upload(path, body, { contentType: video.mimeType ?? 'video/mp4' });
+      if (up.error) throw new Error(up.error.message);
+      const { data, error } = await sb.rpc('submit_clip', {
+        p_title: draft.title.trim(), p_question: draft.question.trim(), p_label_a: draft.labelA.trim(), p_label_b: draft.labelB.trim(),
+        p_outcome: draft.outcome, p_pause_at: draft.pauseAt, p_duration: draft.duration, p_source_path: path, p_rights: draft.rights,
+      });
+      if (error) throw new Error(error.message);
+      const { data: row, error: e2 } = await sb.from('my_clips').select('*').eq('id', data as string).single();
+      if (e2) throw new Error(e2.message);
+      return toCreatorClip(row);
+    },
+    async getMyClips() {
+      await ensureSession();
+      const { data, error } = await sb.from('my_clips').select('*').order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      const { data: b } = await sb.from('balances').select('coins').maybeSingle();
+      return { clips: (data ?? []).map(toCreatorClip), balance: Number(b?.coins ?? 0) };
     },
     async placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult> {
       await ensureSession();
