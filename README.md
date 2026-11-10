@@ -49,6 +49,13 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
   - `0006_missions.sql`: `claim_mission`, which re-checks each mission against today's bets
 - `supabase/functions/reveal-url`: signed reveal URL, only after the caller has bet
 
+## Adding a clip
+
+1. Cut `assets/clips/<id>-teaser.mp4` (up to the pause point) and `<id>-reveal.mp4` (from it on), and add both to `src/demoClips.ts`.
+2. Add the outcome with a fresh salt to `privateClips` in `src/api.ts`, and its feed entry with `commitHash = sha256("<id>|<outcome>|<salt>")`.
+3. Run `python3 scripts/og-cards.py` to render its link-preview card (`public/og`) and first-frame poster (`public/posters`).
+4. `npm test` checks that every clip has its files and an honest hash. On deploy, `scripts/clip-pages.mjs` writes the `/c/<id>` page that dare links open.
+
 ## Fairness
 
 - The outcome and reveal URL only come back after the stake is debited.

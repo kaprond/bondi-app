@@ -10,6 +10,7 @@ import { api, Daily, dailyAmount } from './src/api';
 import { loadSave } from './src/persist';
 import { DailyReward } from './src/components/DailyReward';
 import { shareText } from './src/share';
+import { Dare, dareName, readDare } from './src/dare';
 import { onBus } from './src/bus';
 import { sfx } from './src/sfx';
 import { dayKey, isDone, MISSIONS } from './src/missions';
@@ -18,6 +19,8 @@ import { TIERS } from './src/league';
 import { MissionsSheet } from './src/components/MissionsSheet';
 import { LeagueScreen } from './src/components/LeagueScreen';
 import { BreakReminder } from './src/components/BreakReminder';
+import { InstallSheet } from './src/components/InstallSheet';
+import { installKind } from './src/install';
 import { ClipCard } from './src/components/ClipCard';
 import { PoolsScreen } from './src/components/PoolsScreen';
 import { CreatorScreen } from './src/components/CreatorScreen';
@@ -36,6 +39,7 @@ import { FeedClip, Side, Stake } from './src/types';
 
 type Tab = 'feed' | 'pools' | 'create' | 'friends' | 'me';
 const AGE_KEY = 'bondi.ageConfirmed';
+const INSTALL_KEY = 'bondi.installAsked';
 
 export default function App() {
   const [loaded] = useFonts({ Baloo2_600SemiBold, Baloo2_700Bold, Baloo2_800ExtraBold, Quicksand_500Medium, Quicksand_600SemiBold, Quicksand_700Bold });
@@ -57,6 +61,7 @@ function Shell() {
   const [daily, setDaily] = useState<Daily | null>(null);
   const [showDaily, setShowDaily] = useState(false);
   const [invite] = useState(readInvite);
+  const [dare, setDare] = useState<Dare | null>(readDare);
   const [activeIndex, setActiveIndex] = useState(0);
   const [height, setHeight] = useState(0);
   const [tab, setTab] = useState<Tab>('feed');
@@ -72,6 +77,9 @@ function Shell() {
   const [leagueOpen, setLeagueOpen] = useState(false);
   const [missionsOpen, setMissionsOpen] = useState(false);
   const [breakOpen, setBreakOpen] = useState(false);
+  const [installOpen, setInstallOpen] = useState<'prompt' | 'ios' | null>(null);
+  const installAsked = useRef<boolean | null>(null);
+  useEffect(() => { AsyncStorage.getItem(INSTALL_KEY).then((v) => { installAsked.current = v === '1'; }).catch(() => { installAsked.current = true; }); }, []);
   const [claimed, setClaimed] = useState<{ day: string; ids: string[] }>({ day: dayKey(), ids: [] });
   const claiming = useRef(new Set<string>());
 
@@ -131,7 +139,12 @@ function Shell() {
   useEffect(() => {
     AsyncStorage.getItem(AGE_KEY).then((v) => setAgeOk(v === '1')).catch(() => setAgeOk(false));
     (async () => {
-      setBalance(await api.getBalance()); setFeed(await api.getFeed());
+      setBalance(await api.getBalance());
+      const f = await api.getFeed();
+      // a dare link puts that clip first
+      const dc = dare ? f.find((c) => c.id === dare.clipId) : undefined;
+      setFeed(dc ? [dc, ...f.filter((c) => c !== dc)] : f);
+      if (dare && !dc) setDare({ ...dare, clipId: '' });
       const d = await api.getDaily(); setDaily(d); setShowDaily(!d.claimed);
     })();
   }, []);
@@ -144,6 +157,27 @@ function Shell() {
     const p = befriendInviter(invite.from);
     setToast({ id: Date.now(), text: `you and @${p.handle} are friends now` });
   }, [invite, ageOk]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The dared clip is gone from your feed when you already called it.
+  useEffect(() => {
+    if (!dare || dare.clipId || ageOk !== true || setup) return;
+    setToast({ id: Date.now(), text: `you already called the clip ${dareName(dare)} sent. here’s what’s new` });
+    setDare(null);
+  }, [dare, ageOk, setup]);
+
+  // After your third call, once: offer to put bondi on the home screen (web on a phone only).
+  useEffect(() => {
+    if (installAsked.current !== false || stats.bets < 3 || installOpen) return;
+    const kind = installKind();
+    if (kind === 'none') return;
+    installAsked.current = true;
+    setInstallOpen(kind);
+  }, [activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  const installDone = (installed: boolean) => {
+    setInstallOpen(null);
+    AsyncStorage.setItem(INSTALL_KEY, '1').catch(() => {});
+    if (installed) setToast({ id: Date.now(), text: 'bondi is on your home screen 🎉' });
+  };
 
   // Desktop: arrow keys or j/k move through the feed.
   useEffect(() => {
@@ -226,7 +260,7 @@ function Shell() {
               viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
               getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
               renderItem={({ item, index }) => (
-                <ClipCard clip={item} active={tab === 'feed' && index === activeIndex && !showDaily && !leagueOpen && !missionsOpen && !breakOpen} height={height} topInset={insets.top}
+                <ClipCard clip={item} dare={dare?.clipId === item.id ? dare : undefined} active={tab === 'feed' && index === activeIndex && !showDaily && !leagueOpen && !missionsOpen && !breakOpen && !installOpen} height={height} topInset={insets.top}
                   balance={balance} placeBet={placeBet} onNext={() => next(index)} />
               )}
               ListFooterComponent={<FeedEnd height={height} onPools={() => setTab('pools')} onCreate={() => setTab('create')} onInvite={async () => {
@@ -242,6 +276,7 @@ function Shell() {
         {showDaily && daily && !daily.claimed && <DailyReward daily={daily} onClaim={claim} onLater={() => setShowDaily(false)} />}
         {missionsOpen && <MissionsSheet claimed={claimed.day === dayKey() ? claimed.ids : []} onClose={() => setMissionsOpen(false)} />}
         {leagueOpen && <LeagueScreen topInset={insets.top} onClose={() => setLeagueOpen(false)} />}
+        {installOpen && <InstallSheet kind={installOpen} onDone={installDone} />}
         {breakOpen && <BreakReminder onDone={() => { setBreakOpen(false); setBreakKey((k) => k + 1); }} />}
         {toast && <Toast key={toast.id} id={toast.id} text={toast.text} top={insets.top + 64} onDone={clearToast} />}
       </View>
@@ -268,7 +303,7 @@ function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPo
     <View style={[styles.end, { height }]}>
       <T size={44}>🛵</T>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>you called them all</H>
-      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips drop every day at 18:00. until then, pull your friends in. you both get 500 coins.</T>
+      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips land as players post them. until then, pull your friends in. you both get 500 coins.</T>
       <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +500 each</T></Pressable>
       <Pressable onPress={onPools} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>start a friend pool</T></Pressable>
       <Pressable onPress={onCreate} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>post your own clip · earn coins</T></Pressable>

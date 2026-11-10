@@ -16,10 +16,11 @@ import { useLeague } from '../leagueState';
 import { standings, TIERS } from '../league';
 import { friendCalls, inviteCode, inviteLink, nameOf } from '../social';
 import { Avatar } from '../avatar';
+import { Dare, dareName } from '../dare';
 
-interface Props { clip: FeedClip; result: BetResult; stake: number; streak: number; onNext: () => void; onReplay: () => void }
+interface Props { clip: FeedClip; result: BetResult; stake: number; streak: number; dare?: Dare; onDare: () => void; onNext: () => void; onReplay: () => void }
 
-export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }: Props) {
+export function ResultOverlay({ clip, result, stake, streak, dare, onDare, onNext, onReplay }: Props) {
   const pop = useRef(new Animated.Value(0)).current;
   const [proof, setProof] = useState(false);
   const label = result.outcome === 'a' ? clip.labelA : clip.labelB;
@@ -31,6 +32,9 @@ export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }:
   const names = (xs: { id: string }[]) => xs.length === 1 ? nameOf(xs[0].id) : `${xs.slice(0, -1).map((x) => nameOf(x.id)).join(', ')} and ${nameOf(xs[xs.length - 1].id)}`;
   const friendLine = !fc.length ? null : !right.length ? `none of your friends saw that coming` : !wrong.length ? `${names(right)} called it too` : `${names(right)} called it. ${names(wrong)} didn’t`;
   const crowdLine = crowd < 40 ? `only ${crowd}% saw that coming` : `${crowd}% of players called it`;
+  const dareLine = !dare ? null : !dare.pick ? `${dareName(dare)} dared you. dare them back 🎯`
+    : dare.pick === result.outcome ? `${dareName(dare)} called it too${result.won ? '. tie' : '. they got you'}`
+    : `${dareName(dare)} picked “${dare.pick === 'a' ? clip.labelA : clip.labelB}” and got fooled${result.won ? '. you win this one 😎' : ' too'}`;
   const lg = useLeague();
   const rank = standings({ myWon: lg.myWon, tier: lg.tier, friends: lg.friends }).find((r) => r.you)!.rank;
 
@@ -70,6 +74,11 @@ export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }:
           <Ionicons name="people" size={14} color={result.won ? colors.white : colors.deep} />
           <T size={13} weight="bold" color={result.won ? colors.white : colors.deep}>{crowdLine}</T>
         </View>
+        {dareLine && (
+          <Pressable onPress={onDare} style={[styles.dareRow, { backgroundColor: result.won ? colors.yellow : colors.tint }]} accessibilityRole="button" accessibilityLabel="dare them back">
+            <T size={13} weight="bold" color={colors.deep} style={{ textAlign: 'center' }}>{dareLine}</T>
+          </Pressable>
+        )}
         {friendLine && (
           <View style={styles.friendRow}>
             <View style={{ flexDirection: 'row' }}>{fc.slice(0, 4).map((f, i) => (
@@ -95,6 +104,9 @@ export function ResultOverlay({ clip, result, stake, streak, onNext, onReplay }:
               <T weight="bold" size={14} color={colors.white}>brag 📸</T>
             </Pressable>
           )}
+          <Pressable onPress={onDare} accessibilityRole="button" accessibilityLabel="dare a friend">
+            <T weight="bold" size={14} color={result.won ? colors.white : colors.brand}>dare 🎯</T>
+          </Pressable>
           <Pressable onPress={() => setProof((p) => !p)} accessibilityRole="button"><T weight="bold" size={14} color={result.won ? colors.white : colors.brand}>{proof ? 'hide proof' : 'check it was fair'}</T></Pressable>
         </View>
         {proof && (
@@ -120,7 +132,8 @@ const styles = StyleSheet.create({
   streak: { backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 4 },
   crowd: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 },
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
-  links: { flexDirection: 'row', gap: 24 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 18, rowGap: 6 },
+  dareRow: { borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 },
   proof: { alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 14, padding: 12, gap: 4 },
   mono: { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) },
 });
