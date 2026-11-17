@@ -1,5 +1,7 @@
 import { blockedTopic } from './moderation';
-import { crewByName, ME, nameOf } from './social';
+import { crewByName, ME, nameOf, refreshSocial, toLocal, toServer } from './social';
+import { LIVE, rpc } from './backend';
+import { toast } from './bus';
 
 export { ME, nameOf };
 export interface PoolOption { id: string; label: string; memberId?: string }
@@ -40,7 +42,15 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
   const controls = (p: Pool, uid: string) => uid === p.subjectId || p.options.some((o) => o.memberId === uid);
 
   return {
+    live: false as const,
     list: () => pools.map((p) => ({ ...p })),
+    subscribe(_l: () => void) { return () => {}; },
+    refresh() {},
+    consent(id: string, accept: boolean) {
+      const p = pools.find((x) => x.id === id);
+      if (p?.status === 'pending_consent') p.status = accept ? 'open' : 'rejected';
+      onChange(pools);
+    },
 
     /** Put back pools saved on this device. */
     restore(saved: Pool[]) {
@@ -119,3 +129,107 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
   };
 }
 export type PoolsStore = ReturnType<typeof createPoolsStore>;
+
+// Live pools ---------------------------------------------------------------------
+
+type ServerPool = {
+  id: string; group_id: string; group_name: string; question: string; stake: number; created_by: string; subject: string | null;
+  status: PoolStatus | 'locked'; proposed: string | null; resolved: string | null;
+  options: { id: string; label: string; member: string | null }[];
+  entries: { user: string; option: string }[]; votes: { user: string; confirm: boolean }[];
+};
+const fromServer = (p: ServerPool): Pool => ({
+  id: p.id, groupName: p.group_name, question: p.question, stake: Number(p.stake), createdBy: toLocal(p.created_by)!,
+  subjectId: toLocal(p.subject), status: p.status === 'locked' ? 'open' : p.status,
+  options: p.options.map((o) => ({ id: o.id, label: o.label, memberId: toLocal(o.member) })),
+  entries: p.entries.map((e) => ({ userId: toLocal(e.user)!, optionId: e.option })),
+  votes: p.votes.map((v) => ({ userId: toLocal(v.user)!, confirm: v.confirm })),
+  proposedOptionId: p.proposed ?? undefined, resolvedOptionId: p.resolved ?? undefined,
+});
+
+/**
+ * Same shape as the demo store, backed by the server. Checks that can fail fast run locally and
+ * throw; the change itself goes to an RPC, then the pools and your balance are re-fetched.
+ */
+export function createLivePoolsStore(onChange: () => void = () => {}) {
+  let pools: Pool[] = [];
+  const listeners = new Set<() => void>();
+  const changed = () => { onChange(); listeners.forEach((l) => l()); };
+
+  async function refresh() {
+    try {
+      await refreshSocial(); // ids in pools map through your user id
+      pools = (await rpc<ServerPool[]>('my_pools')).map(fromServer);
+      changed();
+    } catch (e) { console.warn('pools sync failed', e); }
+  }
+  const remote = (fn: string, args: Record<string, unknown>) => rpc(fn, args).catch((e: Error) => toast(e.message)).finally(refresh);
+  const find = (id: string) => pools.find((x) => x.id === id);
+  const controls = (p: Pool, uid: string) => uid === p.subjectId || p.options.some((o) => o.memberId === uid);
+
+  refresh();
+  setInterval(refresh, 15000);
+
+  return {
+    live: true as const,
+    list: () => pools.map((p) => ({ ...p })),
+    restore(_saved: Pool[]) { /* server is the source of truth */ },
+    subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
+    refresh,
+
+    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string }): Pool {
+      const topic = blockedTopic(input.question + ' ' + input.options.map((o) => o.label).join(' '));
+      if (topic) throw new Error(`pools about ${topic} aren’t allowed. keep it fun for everyone.`);
+      if (input.options.length < 2) throw new Error('add at least two outcomes.');
+      const crew = crewByName(input.groupName ?? '');
+      if (!crew) throw new Error('make a crew with your friends first.');
+      if (crew.id.startsWith('crew-')) throw new Error('your new crew is still saving. try again in a second.');
+      const p: Pool = {
+        id: `tmp-${Date.now()}`, groupName: crew.name, question: input.question, stake: input.stake, createdBy: ME,
+        subjectId: input.subjectId, status: input.subjectId ? 'pending_consent' : 'open', options: input.options, entries: [], votes: [],
+      };
+      pools.unshift(p);
+      changed();
+      rpc<string>('create_pool', {
+        p_group: crew.id, p_question: input.question, p_stake: input.stake, p_subject: toServer(input.subjectId) ?? null,
+        p_options: input.options.map((o) => ({ label: o.label, member: toServer(o.memberId) ?? null })),
+      }).then((id) => { p.id = id; }, (e: Error) => toast(e.message)).finally(refresh);
+      return p;
+    },
+
+    /** The person a pool is about says yes or no. */
+    consent(id: string, accept: boolean) { remote('consent_as_subject', { p_pool: id, p_accept: accept }); },
+    simulateConsent(_id: string) { /* demo only */ },
+
+    join(id: string, optionId: string) {
+      const p = find(id);
+      if (!p || p.status !== 'open') throw new Error('this pool isn’t open.');
+      if (controls(p, ME)) throw new Error('you’re part of this outcome, so you can’t stake on it.');
+      if (p.entries.some((e) => e.userId === ME)) throw new Error('you’re already in.');
+      p.entries.push({ userId: ME, optionId });
+      changed();
+      remote('join_pool', { p_pool: id, p_option: optionId });
+    },
+
+    propose(id: string, optionId: string) {
+      const p = find(id);
+      if (!p || p.status !== 'open') throw new Error('pool isn’t open.');
+      p.status = 'proposed'; p.proposedOptionId = optionId; p.votes = [];
+      changed();
+      remote('propose_result', { p_pool: id, p_option: optionId });
+    },
+
+    vote(id: string, confirm: boolean) {
+      const p = find(id);
+      if (!p?.entries.some((e) => e.userId === ME)) throw new Error('only people in the pool can vote.');
+      p.votes = p.votes.filter((v) => v.userId !== ME).concat({ userId: ME, confirm });
+      changed();
+      remote('vote_result', { p_pool: id, p_confirm: confirm });
+    },
+
+    /** Settles on the server 48 hours after the result is proposed (cron job). */
+    finalize(_id: string) { /* demo only */ },
+  };
+}
+export type LivePoolsStore = ReturnType<typeof createLivePoolsStore>;
+export { LIVE };

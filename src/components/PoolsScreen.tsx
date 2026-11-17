@@ -6,14 +6,14 @@ import { onHydrate, save } from '../persist';
 import { Avatar } from '../avatar';
 import { CATEGORIES, Challenge, randomChallenge } from '../challenges';
 import { blockedTopic } from '../moderation';
-import { createPoolsStore, ME, nameOf, Pool, PoolOption } from '../pools';
+import { createLivePoolsStore, createPoolsStore, LIVE, ME, nameOf, Pool, PoolOption } from '../pools';
 import { crewList, me, useSocial } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 
-const store = createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
-onHydrate((d) => { if (Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
+const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
+onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
 const STAKES = [10, 50, 100, 250];
 type Draft = Challenge & { crew: string };
 type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string };
@@ -27,6 +27,8 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
   const refresh = () => { setTick((t) => t + 1); onBalance(); };
   const pools = store.list();
   const crews = crewList();
+  // Live: re-render and re-read the balance whenever the server sync lands.
+  useEffect(() => store.subscribe(refresh), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!intent) return;
@@ -39,7 +41,8 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
 
   if (view.kind === 'create') return <CreatePool renderBar={renderBar} draft={view.draft} onDone={(id) => { refresh(); setView(id ? { kind: 'detail', id } : { kind: 'list' }); }} />;
   if (view.kind === 'detail') {
-    const p = pools.find((x) => x.id === view.id)!;
+    const p = pools.find((x) => x.id === view.id);
+    if (!p) { setTimeout(() => setView({ kind: 'list' })); return null; }
     return <PoolDetail renderBar={renderBar} pool={p} onBack={() => setView({ kind: 'list' })} refresh={refresh} />;
   }
 
@@ -326,8 +329,16 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
 
       {p.status === 'pending_consent' && (
         <View style={styles.notice}>
-          <T weight="semi" color={colors.deep}>{nameOf(p.subjectId!)} needs to accept before anyone can join.</T>
-          <PillButton label={`demo: ${nameOf(p.subjectId!)} says ok`} variant="ghost" onPress={() => act(() => store.simulateConsent(p.id))} />
+          {p.subjectId === ME ? (<>
+            <T weight="semi" color={colors.deep}>this pool is about you. ok with it?</T>
+            <View style={styles.wrapRow}>
+              <Chip label="yes, open it" onPress={() => act(() => store.consent(p.id, true))} />
+              <Chip label="no thanks" onPress={() => act(() => store.consent(p.id, false))} />
+            </View>
+          </>) : (<>
+            <T weight="semi" color={colors.deep}>{nameOf(p.subjectId!)} needs to accept before anyone can join.</T>
+            {!LIVE && <PillButton label={`demo: ${nameOf(p.subjectId!)} says ok`} variant="ghost" onPress={() => act(() => store.simulateConsent(p.id))} />}
+          </>)}
         </View>
       )}
 
@@ -367,7 +378,9 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
               <Chip label={myVote?.confirm === false ? '✗ disputed' : 'dispute'} active={myVote?.confirm === false} onPress={() => act(() => store.vote(p.id, false))} />
             </View>
           )}
-          <PillButton label="demo: skip the 48 hours" variant="ghost" onPress={() => act(() => store.finalize(p.id))} />
+          {LIVE
+            ? <T size={12} color={colors.muted}>settles automatically 48 hours after the result was proposed.</T>
+            : <PillButton label="demo: skip the 48 hours" variant="ghost" onPress={() => act(() => store.finalize(p.id))} />}
         </View>
       )}
       {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}

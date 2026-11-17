@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import { onHydrate, save } from './persist';
+import { LIVE, rpc, sb, ensureSession } from './backend';
+import { toast } from './bus';
 
 /**
- * Profiles, friends, invites and crews for the demo build.
- * In-memory mirror of supabase/migrations/0004_social.sql.
+ * Profiles, friends, invites and crews.
+ * Demo build: in-memory mirror of supabase/migrations/0004_social.sql, seeded with sample friends.
+ * Live build (LIVE): the same store is a cache of the server. Reads stay synchronous, every change
+ * goes to an RPC and the cache is refreshed from my_social() afterwards and every 15 seconds.
  */
 
 export interface Person {
@@ -30,10 +34,11 @@ const people: Record<string, Person> = {
   finn:   { id: 'finn', handle: 'finnster', name: 'finn', emoji: '🏄', color: '#005264', bio: 'will bet on the weather', city: 'den haag', stats: { calls: 22, hitRate: 41, poolsWon: 0, bestStreak: 2 } },
 };
 
-let friends = new Set(['alex', 'sam', 'jordan', 'taylor']);
-let incoming = new Set(['noor']);
+if (LIVE) for (const id of Object.keys(people)) if (id !== ME) delete people[id];
+let friends = new Set(LIVE ? [] : ['alex', 'sam', 'jordan', 'taylor']);
+let incoming = new Set(LIVE ? [] : ['noor']);
 let outgoing = new Set<string>();
-let crews: Crew[] = [
+let crews: Crew[] = LIVE ? [] : [
   { id: 'house', name: 'house', emoji: '🏠', memberIds: [ME, 'sam', 'jordan', 'taylor'] },
   { id: 'party', name: 'party crew', emoji: '🎉', memberIds: [ME, 'alex', 'sam', 'taylor'] },
   { id: 'college', name: 'college', emoji: '🎓', memberIds: [ME, 'alex', 'jordan', 'sam', 'taylor'] },
@@ -55,6 +60,7 @@ const listeners = new Set<() => void>();
 const persist = () => save({ social: { me: people.me, extra: Object.values(people).filter((p) => p.id.startsWith('u:')), friends: [...friends], incoming: [...incoming], outgoing: [...outgoing], crews, code: myCode } });
 const emit = () => { version++; persist(); listeners.forEach((l) => l()); };
 onHydrate((d) => {
+  if (LIVE) return; // the server is the source of truth
   const s = d.social as undefined | { me: Person; extra: Person[]; friends: string[]; incoming: string[]; outgoing: string[]; crews: Crew[]; code: string };
   if (!s) { persist(); return; }
   people.me = { ...people.me, ...s.me };
@@ -68,6 +74,64 @@ onHydrate((d) => {
 /** Re-render on any social change. */
 export function useSocial(): number {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => version, () => version);
+}
+
+// Live sync ----------------------------------------------------------------------
+let myUid = '';
+/** Server user id -> the id the app uses (you are always ME). */
+export const toLocal = (uid?: string | null) => (!uid ? undefined : uid === myUid ? ME : uid);
+/** App id -> server user id. */
+export const toServer = (id?: string) => (!id ? undefined : id === ME ? myUid : id);
+
+type Row = { id: string; handle: string | null; display_name: string | null; bio: string | null; city: string | null; avatar_emoji: string; avatar_color: string; calls: number; hit_rate: number };
+const fromRow = (r: Row): Person => {
+  const id = toLocal(r.id)!;
+  const old = people[id];
+  const handle = r.handle ?? (id === ME ? '' : 'player');
+  return {
+    id, handle, name: r.display_name ?? (handle || 'you'), emoji: r.avatar_emoji, color: r.avatar_color, bio: r.bio ?? '', city: r.city ?? '',
+    stats: id === ME && old ? old.stats : { calls: r.calls, hitRate: r.hit_rate, poolsWon: old?.stats.poolsWon ?? 0, bestStreak: old?.stats.bestStreak ?? 0 },
+  };
+};
+
+let inFlight: Promise<void> | null = null;
+/** Pull your profile, friends, requests and crews from the server. Live build only. */
+export function refreshSocial(): Promise<void> {
+  if (!LIVE) return Promise.resolve();
+  inFlight ??= (async () => {
+    try {
+      myUid = await ensureSession();
+      const d = await rpc<{ me: string; code: string | null; people: Row[]; relations: { id: string; kind: Relation }[]; crews: { id: string; name: string; emoji: string; members: string[] }[] }>('my_social');
+      for (const r of d.people) people[toLocal(r.id)!] = fromRow(r);
+      friends = new Set(d.relations.filter((r) => r.kind === 'friend').map((r) => r.id));
+      incoming = new Set(d.relations.filter((r) => r.kind === 'incoming').map((r) => r.id));
+      outgoing = new Set(d.relations.filter((r) => r.kind === 'outgoing').map((r) => r.id));
+      crews = d.crews.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji, memberIds: c.members.map((m) => toLocal(m)!) }));
+      if (d.code) myCode = d.code;
+      emit();
+    } catch (e) {
+      console.warn('social sync failed', e);
+    } finally { inFlight = null; }
+  })();
+  return inFlight;
+}
+if (LIVE) { refreshSocial(); setInterval(refreshSocial, 15000); }
+
+/** Run a server change, then re-sync. Errors show as a toast and the cache rolls back on the next sync. */
+function remote(fn: string, args: Record<string, unknown>, after?: () => void) {
+  rpc(fn, args).then(after, (e: Error) => toast(e.message)).finally(refreshSocial);
+}
+
+let searching: ReturnType<typeof setTimeout> | undefined;
+function searchServer(q: string) {
+  clearTimeout(searching);
+  searching = setTimeout(async () => {
+    try {
+      const rows = await rpc<Row[]>('search_people', { p_q: q });
+      for (const r of rows) people[toLocal(r.id)!] ??= fromRow(r);
+      if (rows.length) emit();
+    } catch { /* offline: show what we have */ }
+  }, 250);
 }
 
 export const person = (id: string): Person => people[id] ?? { ...people.me, id, handle: id, name: id, emoji: '🙂', color: '#54B8CE' };
@@ -90,6 +154,7 @@ export const suggestions = () => Object.values(people).filter((p) => relation(p.
 export function search(q: string): Person[] {
   const s = q.trim().replace(/^@/, '').toLowerCase();
   if (s.length < 2) return [];
+  if (LIVE) searchServer(s);
   return Object.values(people).filter((p) => p.id !== ME && (p.handle.includes(s) || p.name.includes(s)));
 }
 
@@ -106,15 +171,31 @@ export function updateProfile(patch: Partial<Pick<Person, 'name' | 'handle' | 'b
   if (patch.bio !== undefined && patch.bio.length > 80) throw new Error('keep your bio under 80 characters.');
   people.me = { ...people.me, ...patch, name: (patch.name ?? people.me.name).trim().toLowerCase() };
   emit();
+  if (LIVE) {
+    const m = people.me;
+    ensureSession().then(async (uid) => {
+      const { error } = await sb!.from('profiles').update({ handle: m.handle || null, display_name: m.name.slice(0, 20), bio: m.bio, city: m.city.slice(0, 24), avatar_emoji: m.emoji, avatar_color: m.color }).eq('id', uid);
+      if (error) toast(error.code === '23505' ? `@${m.handle} is taken.` : error.message);
+    }).finally(refreshSocial);
+  }
 }
 
 export function syncMyStats(s: { calls: number; hitRate: number; bestStreak: number }) {
   people.me = { ...people.me, stats: { ...people.me.stats, ...s } };
 }
 
-/** Someone's invite link brought you here: you're friends straight away. Returns their name. */
-export function befriendInviter(handle: string): Person {
+/**
+ * Someone's invite link brought you here: you're friends straight away. Returns their name.
+ * Live: new players become friends through redeem_invite; players who already had an account
+ * (`request: true`) send a friend request instead.
+ */
+export function befriendInviter(handle: string, opts: { request?: boolean } = {}): Person {
   const h = handle.trim().replace(/^@/, '').toLowerCase().slice(0, 20);
+  if (LIVE) {
+    if (opts.request) remote('send_friend_request', { p_handle: h });
+    return Object.values(people).find((x) => x.id !== ME && x.handle === h)
+      ?? { ...people.me, id: `u:${h}`, handle: h, name: h, emoji: '🙂', color: '#54B8CE', bio: '', city: '', stats: { calls: 0, hitRate: 0, poolsWon: 0, bestStreak: 0 } };
+  }
   let p = Object.values(people).find((x) => x.id !== ME && x.handle === h);
   if (!p) {
     const n = [...h].reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -129,6 +210,7 @@ export function befriendInviter(handle: string): Person {
 export function sendRequest(id: string) {
   if (relation(id) !== 'none') return;
   outgoing.add(id); emit();
+  if (LIVE) { remote('send_friend_request', { p_handle: person(id).handle }); return; }
   // Demo: they accept a moment later. In the real app they get a push.
   setTimeout(() => { if (outgoing.delete(id)) { friends.add(id); emit(); } }, 2200);
 }
@@ -136,12 +218,18 @@ export function respond(id: string, accept: boolean) {
   if (!incoming.delete(id)) return;
   if (accept) friends.add(id);
   emit();
+  if (LIVE) remote('respond_friend_request', { p_from: id, p_accept: accept });
 }
-export function cancelRequest(id: string) { if (outgoing.delete(id)) emit(); }
+export function cancelRequest(id: string) {
+  if (!outgoing.delete(id)) return;
+  emit();
+  if (LIVE) remote('cancel_friend_request', { p_to: id });
+}
 export function removeFriend(id: string) {
   if (!friends.delete(id)) return;
   crews = crews.map((c) => ({ ...c, memberIds: c.memberIds.filter((m) => m !== id) }));
   emit();
+  if (LIVE) remote('remove_friend', { p_other: id });
 }
 
 export const crewList = () => crews.map((c) => ({ ...c }));
@@ -156,12 +244,14 @@ export function createCrew(name: string, emoji: string, memberIds: string[]): Cr
   const c: Crew = { id: `crew-${Date.now()}`, name: n, emoji, memberIds: [ME, ...memberIds] };
   crews = [...crews, c];
   emit();
+  if (LIVE) remote('create_crew', { p_name: n, p_emoji: emoji, p_members: memberIds });
   return c;
 }
 export function addToCrew(crewId: string, id: string) {
   if (!friends.has(id)) throw new Error('you can only add friends to a crew.');
   crews = crews.map((c) => (c.id === crewId && !c.memberIds.includes(id) ? { ...c, memberIds: [...c.memberIds, id] } : c));
   emit();
+  if (LIVE) remote('add_to_crew', { p_group: crewId, p_user: id });
 }
 
 /**
@@ -169,6 +259,7 @@ export function addToCrew(crewId: string, id: string) {
  * In the real app this comes from bets joined on friendships, shown only after you bet.
  */
 export function friendCalls(clipId: string, crowdA: number): { id: string; side: 'a' | 'b' }[] {
+  if (LIVE) return []; // no made-up picks for real friends
   const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   return [...friends]
     .filter((f) => hash(clipId + f) % 3 !== 0)
