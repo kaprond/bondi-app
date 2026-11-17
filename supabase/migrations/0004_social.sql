@@ -154,7 +154,7 @@ language plpgsql security definer set search_path = public as $$
 declare v_code text;
 begin
   loop
-    v_code := 'BND-' || upper(substr(encode(gen_random_bytes(4), 'base64'), 1, 4));
+    v_code := 'BND-' || upper(substr(encode(extensions.gen_random_bytes(4), 'base64'), 1, 4));
     exit when v_code ~ '^BND-[A-Z0-9]{4}$' and not exists (select 1 from public.invite_codes where code = v_code);
   end loop;
   insert into public.invite_codes (code, owner) values (v_code, new.id);
