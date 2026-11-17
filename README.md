@@ -39,7 +39,9 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
 - `src/components/BreakReminder.tsx`: the 30-minute break nudge
 - `public/`: web page template (`index.html` with link previews), manifest, icons, og image
 - `src/api.ts`: `BondiApi`. Uses `src/supabaseApi.ts` when `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set, otherwise an in-memory demo
-- `src/social.ts`, `src/pools.ts`, `src/challenges.ts`, `src/moderation.ts`: demo stores that mirror the SQL
+- `src/backend.ts`: the Supabase client (null in the demo build), sign-in and `rpc()`
+- `src/social.ts`, `src/pools.ts`: friends, crews, profile and pools. Demo: in-memory stores seeded with sample friends. Live: the same stores act as a cache of the server (`my_social()`, `my_pools()`), every change goes to an RPC, and they re-sync every 15 seconds
+- `src/challenges.ts`, `src/moderation.ts`: pool idea generator and the topic filter (the server runs the same filter in `create_pool`)
 - `supabase/migrations/`
   - `0001_init.sql`: clips with hidden outcome, bets, append-only coin ledger, atomic `place_bet`
   - `0002_friend_pools.sql`: groups, pools, consent, conflict rule, confirm or dispute, refunds
@@ -47,7 +49,19 @@ Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`
   - `0004_social.sql`: profile fields, friendships, invite codes and redemptions, crews
   - `0005_daily_streak.sql`: daily coins with a day streak (`daily_status`, new `claim_daily`)
   - `0006_missions.sql`: `claim_mission`, which re-checks each mission against today's bets
+  - `0007_creator_clips.sql`: creator uploads, review, 5% commission
+  - `0008_lockdown.sql`: signed-out users can't call anything, read-only views, own balance only, profile edits can't touch daily coins
+  - `0009_live_pools.sql`: `create_pool` with the topic filter, `my_social`/`my_pools` snapshots, people search, pools settle on their own (pg_cron, every 10 minutes)
+  - `0010_fix_consent.sql`: the person a pool is about can accept or decline
 - `supabase/functions/reveal-url`: signed reveal URL, only after the caller has bet
+
+## Going live
+
+Supabase project `bondi` (eu-central-1) has all migrations applied. To switch an environment from the demo to the real backend:
+
+1. Supabase → Authentication → Sign In / Providers: turn on **Anonymous sign-ins** (until phone/Apple/Google login lands).
+2. Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (the publishable key) in Vercel and redeploy.
+3. The feed reads `feed_clips`, which is empty until clips are uploaded to Stream/Storage and inserted. Pools and friends work without clips.
 
 ## Adding a clip
 

@@ -20,7 +20,9 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- Replaces 0001's claim_daily(): now returns the amount and the streak as well as the balance.
-drop function if exists public.claim_daily();
+-- Keep the old one out of the way instead of dropping it (no destructive step), and lock it.
+alter function public.claim_daily() rename to claim_daily_v1;
+revoke execute on function public.claim_daily_v1() from public, anon, authenticated;
 create function public.claim_daily()
 returns table (balance bigint, amount bigint, day_streak int)
 language plpgsql security definer set search_path = public as $$

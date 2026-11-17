@@ -178,9 +178,7 @@ export function createMockApi(): BondiApi {
 }
 
 import { createSupabaseApi } from './supabaseApi';
-
-const SB_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SB_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+import { LIVE } from './backend';
 
 /** Uses Supabase when configured, otherwise the in-memory demo backend. */
-export const api: BondiApi = SB_URL && SB_KEY ? createSupabaseApi(SB_URL, SB_KEY) : createMockApi();
+export const api: BondiApi = LIVE ? createSupabaseApi() : createMockApi();

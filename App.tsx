@@ -28,6 +28,7 @@ import { refreshCreator } from './src/creatorState';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { FriendsScreen } from './src/components/FriendsScreen';
 import { SetupProfile } from './src/components/SetupProfile';
+import { LIVE } from './src/backend';
 import { befriendInviter, friendList, incomingList, inviteCode, inviteLink, syncMyStats, useSocial } from './src/social';
 import { H, T } from './src/components/ui';
 import { BarTone, TopBar } from './src/components/TopBar';
@@ -154,8 +155,8 @@ function Shell() {
     if (!invite || ageOk !== true || setup) return;
     clearInviteFromUrl();
     if (invite.code === inviteCode()) return;
-    const p = befriendInviter(invite.from);
-    setToast({ id: Date.now(), text: `you and @${p.handle} are friends now` });
+    const p = befriendInviter(invite.from, { request: true });
+    setToast({ id: Date.now(), text: LIVE ? `friend request sent to @${p.handle}` : `you and @${p.handle} are friends now` });
   }, [invite, ageOk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The dared clip is gone from your feed when you already called it.

@@ -93,11 +93,11 @@ begin
     raise exception 'you have 3 clips waiting for review already'; end if;
 
   select handle into v_handle from public.profiles where id = v_user;
-  v_salt := 'bnd-' || encode(gen_random_bytes(6), 'hex');
+  v_salt := 'bnd-' || encode(extensions.gen_random_bytes(6), 'hex');
   insert into public.clips (id, title, creator, question, label_a, label_b, odds_a, odds_b,
       outcome, salt, commit_hash, status, creator_id, source_path, pause_at, duration, rights_confirmed_at, committed_at)
     values (v_id, trim(p_title), '@' || coalesce(v_handle, 'player'), trim(p_question), trim(p_label_a), trim(p_label_b), 1.90, 1.90,
-      p_outcome, v_salt, encode(digest(v_id::text || '|' || p_outcome::text || '|' || v_salt, 'sha256'), 'hex'),
+      p_outcome, v_salt, encode(extensions.digest(v_id::text || '|' || p_outcome::text || '|' || v_salt, 'sha256'), 'hex'),
       'in_review', v_user, p_source_path, p_pause_at, p_duration, now(), now());
   return v_id;
 end $$;

@@ -1,7 +1,7 @@
-import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { BondiApi } from './api';
+import { ensureSession as signIn, sb as client } from './backend';
+import { refreshSocial } from './social';
 import { BetResult, FeedClip, Side, Stake } from './types';
 import { ClipDraft, CreatorClip, draftProblems } from './creator';
 
@@ -13,22 +13,13 @@ const toCreatorClip = (r: any): CreatorClip => ({
 });
 
 /**
- * Real backend. Requires EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY,
+ * Real backend (see src/backend.ts for the client and env vars),
  * plus an Edge Function `reveal-url` that returns a short-lived signed URL for a clip
  * the caller has already bet on (checked against public.bets).
  */
-export function createSupabaseApi(url: string, anonKey: string): BondiApi {
-  const sb: SupabaseClient = createClient(url, anonKey, {
-    auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
-  });
-
-  async function ensureSession() {
-    const { data } = await sb.auth.getSession();
-    if (!data.session) {
-      const { error } = await sb.auth.signInAnonymously();
-      if (error) throw error;
-    }
-  }
+export function createSupabaseApi(): BondiApi {
+  const sb: SupabaseClient = client!;
+  const ensureSession = async () => { await signIn(); };
 
   return {
     async getFeed() {
@@ -64,6 +55,7 @@ export function createSupabaseApi(url: string, anonKey: string): BondiApi {
       await ensureSession();
       const { error } = await sb.rpc('redeem_invite', { p_code: code });
       if (error) throw new Error(error.message);
+      refreshSocial();
       const { data } = await sb.from('balances').select('coins').maybeSingle();
       return Number(data?.coins ?? 0);
     },
