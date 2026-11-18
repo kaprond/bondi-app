@@ -39,6 +39,11 @@ import { colors, radius } from './src/theme';
 import { FeedClip, Side, Stake } from './src/types';
 
 type Tab = 'feed' | 'pools' | 'create' | 'friends' | 'me';
+/** Launch: friend pools first. Flip to true to bring back the clip feed, posting and missions. */
+export const CLIPS_LIVE = false;
+const TABS: readonly (readonly [Tab, string, string])[] = CLIPS_LIVE
+  ? [['feed', 'for you', 'play-circle'], ['pools', 'pools', 'trophy'], ['create', 'post', 'add-circle'], ['friends', 'friends', 'people'], ['me', 'me', 'person-circle']]
+  : [['pools', 'pools', 'trophy'], ['friends', 'friends', 'people'], ['feed', 'clips', 'play-circle'], ['me', 'me', 'person-circle']];
 const AGE_KEY = 'bondi.ageConfirmed';
 const INSTALL_KEY = 'bondi.installAsked';
 
@@ -62,10 +67,10 @@ function Shell() {
   const [daily, setDaily] = useState<Daily | null>(null);
   const [showDaily, setShowDaily] = useState(false);
   const [invite] = useState(readInvite);
-  const [dare, setDare] = useState<Dare | null>(readDare);
+  const [dare, setDare] = useState<Dare | null>(() => (CLIPS_LIVE ? readDare() : null));
   const [activeIndex, setActiveIndex] = useState(0);
   const [height, setHeight] = useState(0);
-  const [tab, setTab] = useState<Tab>('feed');
+  const [tab, setTab] = useState<Tab>(CLIPS_LIVE ? 'feed' : 'pools');
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
   const listRef = useRef<FlatList<FeedClip>>(null);
@@ -239,7 +244,7 @@ function Shell() {
   );
 
   const renderBar = (tone: BarTone) => <TopBar tone={tone} topInset={insets.top} balance={balance} streak={streak} onCoins={() => setTab('me')}
-    missions={{ done: missionsDone, total: MISSIONS.length }} onMissions={() => setMissionsOpen(true)} />;
+    missions={CLIPS_LIVE ? { done: missionsDone, total: MISSIONS.length } : undefined} onMissions={() => setMissionsOpen(true)} />;
   const next = (i: number) => { if (i + 1 < feed.length) listRef.current?.scrollToIndex({ index: i + 1 }); else setActiveIndex(feed.length); };
 
   return (
@@ -249,8 +254,13 @@ function Shell() {
         {tab === 'create' && <CreatorScreen renderBar={renderBar} onBalance={setBalance} />}
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} />}
-        <View style={[{ flex: 1 }, tab !== 'feed' && { display: 'none' }]} onLayout={(e: LayoutChangeEvent) => setHeight(e.nativeEvent.layout.height)}>
-          {height > 0 && (
+        {!CLIPS_LIVE && tab === 'feed' && <ClipsSoon topInset={insets.top} onPools={() => setTab('pools')} onInvite={async () => {
+          const r = await shareText(`come play bondi with me. friend pools with free coins, no cash. we both get 500 coins.`, inviteLink());
+          if (r !== 'dismissed') recordShare();
+          if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
+        }} />}
+        <View style={[{ flex: 1 }, (tab !== 'feed' || !CLIPS_LIVE) && { display: 'none' }]} onLayout={(e: LayoutChangeEvent) => setHeight(e.nativeEvent.layout.height)}>
+          {CLIPS_LIVE && height > 0 && (
             <FlatList
               ref={listRef}
               data={feed}
@@ -283,12 +293,14 @@ function Shell() {
       </View>
 
       <View style={[styles.tabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        {([['feed', 'for you', 'play-circle'], ['pools', 'pools', 'trophy'], ['create', 'post', 'add-circle'], ['friends', 'friends', 'people'], ['me', 'me', 'person-circle']] as const).map(([key, label, icon]) => {
+        {TABS.map(([key, label, icon]) => {
           const on = tab === key;
           const dot = key === 'friends' ? incomingList().length : 0;
+          const soon = !CLIPS_LIVE && key === 'feed';
           return (
-            <Pressable key={key} onPress={() => { setTab(key); if (key !== 'pools') setPoolIntent(undefined); }} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: on }}>
+            <Pressable key={key} onPress={() => { setTab(key); if (key !== 'pools') setPoolIntent(undefined); }} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={soon ? 'clips, coming soon' : undefined}>
               {dot > 0 && <View style={styles.dot}><T size={10} weight="bold" color={colors.white}>{dot}</T></View>}
+              {soon && <View style={styles.soon}><T size={9} weight="bold" color={colors.deep}>soon</T></View>}
               <Ionicons name={(on ? icon : `${icon}-outline`) as keyof typeof Ionicons.glyphMap} size={24} color={on ? colors.brand : colors.muted} />
               <T weight="bold" size={12} color={on ? colors.brand : colors.muted}>{label}</T>
             </Pressable>
@@ -308,6 +320,20 @@ function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPo
       <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +500 each</T></Pressable>
       <Pressable onPress={onPools} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>start a friend pool</T></Pressable>
       <Pressable onPress={onCreate} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>post your own clip · earn coins</T></Pressable>
+    </View>
+  );
+}
+
+function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools: () => void; onInvite: () => void }) {
+  return (
+    <View style={[styles.end, { flex: 1, paddingTop: topInset + 72 }]}>
+      <View style={styles.soonPill}><T size={13} weight="bold" color={colors.deep}>coming soon</T></View>
+      <T size={44}>🎬</T>
+      <H size={34} color={colors.white} style={{ textAlign: 'center' }}>guess what happens next</H>
+      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>short clips that pause right before the moment. call it with free coins. dropping soon.</T>
+      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>for now: start a pool with your friends.</T>
+      <Pressable onPress={onPools} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>start a friend pool</T></Pressable>
+      <Pressable onPress={onInvite} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>invite friends · +500 each</T></Pressable>
     </View>
   );
 }
@@ -333,6 +359,8 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 2 },
   dot: { position: 'absolute', top: -4, left: '56%', zIndex: 1, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
+  soon: { position: 'absolute', top: -6, left: '54%', zIndex: 1, backgroundColor: colors.yellow, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
+  soonPill: { backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 },
   end: { backgroundColor: colors.sky, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
   endBtn: { backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
 });
