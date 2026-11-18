@@ -67,7 +67,7 @@ def card(c, pause):
         if i == 0:
             d.text((px, y + 10), 'or', font=pill, fill=WHITE); px += d.textlength('or', font=pill) + 18
     d.text((x, y + 92), 'it pauses right before the moment. call it, then watch.', font=ImageFont.truetype(QUICK, 26), fill=(215, 238, 244))
-    d.text((x, H - 96), 'bondi', font=ImageFont.truetype(BALOO, 60), fill=WHITE)
+    d.text((x, H - 96), 'letsjam', font=ImageFont.truetype(BALOO, 60), fill=WHITE)
     d.text((x + 175, H - 74), 'free coins · no cash', font=ImageFont.truetype(QUICK, 28), fill=(220, 240, 245))
     return img
 

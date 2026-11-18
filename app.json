@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "bondi",
-    "slug": "bondi",
+    "name": "LetsJam",
+    "slug": "letsjam",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "nl.bondi.app"
+      "bundleIdentifier": "nl.letsjam.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,20 +18,20 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "nl.bondi.app"
+      "package": "nl.letsjam.app"
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "name": "bondi",
+      "name": "LetsJam",
       "themeColor": "#0095B6",
       "backgroundColor": "#0095B6"
     },
-    "scheme": "bondi",
+    "scheme": "letsjam",
     "plugins": [
       [
         "expo-image-picker",
         {
-          "photosPermission": "bondi needs your videos so you can post a clip.",
+          "photosPermission": "LetsJam needs your videos so you can post a clip.",
           "cameraPermission": false,
           "microphonePermission": false
         }

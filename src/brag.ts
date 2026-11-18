@@ -19,8 +19,8 @@ function draw(b: BragInput): HTMLCanvasElement {
   g.beginPath(); g.arc(80, 1240, 220, 0, Math.PI * 2); g.fill();
   const D = 'Baloo2_800ExtraBold, sans-serif', Q = 'Quicksand_700Bold, sans-serif';
   g.textBaseline = 'alphabetic';
-  g.fillStyle = '#fff'; g.font = `96px ${D}`; g.fillText('bondi', 80, 170);
-  const w = g.measureText('bondi').width; g.fillStyle = '#FFF000'; g.beginPath(); g.arc(80 + w + 22, 146, 13, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fff'; g.font = `96px ${D}`; g.fillText('letsjam', 80, 170);
+  const w = g.measureText('letsjam').width; g.fillStyle = '#FFF000'; g.beginPath(); g.arc(80 + w + 22, 146, 13, 0, Math.PI * 2); g.fill();
 
   g.fillStyle = '#FFF000'; g.font = `190px ${D}`; g.fillText('called it!', 70, 450);
   g.fillStyle = '#fff'; g.font = `52px ${Q}`;
@@ -75,7 +75,7 @@ export async function shareBrag(b: BragInput): Promise<'shared' | 'copied' | 'sa
   try {
     const blob = await new Promise<Blob | null>((res) => draw(b).toBlob(res, 'image/png'));
     if (blob) {
-      const file = new File([blob], 'bondi-called-it.png', { type: 'image/png' });
+      const file = new File([blob], 'letsjam-called-it.png', { type: 'image/png' });
       if (nav?.canShare?.({ files: [file] })) {
         try { await nav.share({ files: [file], text: `${b.text} ${b.link}` }); return 'shared'; } catch { return 'dismissed'; }
       }

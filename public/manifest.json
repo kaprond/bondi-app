@@ -1,6 +1,6 @@
 {
-  "name": "bondi: guess what happens next",
-  "short_name": "bondi",
+  "name": "LetsJam: call it with your crew",
+  "short_name": "LetsJam",
   "description": "Short clips pause right before the moment. Call what happens next with free coins.",
   "start_url": "/",
   "display": "standalone",

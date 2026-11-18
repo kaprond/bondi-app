@@ -1,9 +1,9 @@
-# bondi
+# LetsJam
 
 Scroll short clips. The clip pauses. Call what happens next with free coins. The clip plays on and you find out.
 Coins are free, can't be bought and can't be cashed out.
 
-Built with Expo (SDK 58, React Native) and Supabase. Brand: bondi teal `#0095B6`, Baloo 2 + Quicksand.
+Built with Expo (SDK 58, React Native) and Supabase. Brand: LetsJam teal `#0095B6`, Baloo 2 + Quicksand.
 
 ## What's in the app
 

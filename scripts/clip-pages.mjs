@@ -23,9 +23,9 @@ export function page(c) {
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${title} · bondi</title>
+<title>${title} · LetsJam</title>
 <meta name="description" content="${desc}" />
-<meta property="og:type" content="website" /><meta property="og:site_name" content="bondi" />
+<meta property="og:type" content="website" /><meta property="og:site_name" content="LetsJam" />
 <meta property="og:title" content="${title}" /><meta property="og:description" content="${desc}" />
 <meta property="og:url" content="${url}" /><meta property="og:image" content="${img}" />
 <meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" />
@@ -34,7 +34,7 @@ export function page(c) {
 <meta name="theme-color" content="#0095B6" />
 <style>body{margin:0;height:100vh;display:grid;place-items:center;background:#0095B6;color:#fff;font:700 18px system-ui,sans-serif}a{color:#fff}</style>
 <script>location.replace('/?c=${c.id}' + (location.search ? '&' + location.search.slice(1) : ''));</script>
-</head><body><a href="/?c=${c.id}">open the clip on bondi</a></body></html>
+</head><body><a href="/?c=${c.id}">open the clip on LetsJam</a></body></html>
 `;
 }
 

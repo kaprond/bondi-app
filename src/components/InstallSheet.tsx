@@ -5,14 +5,14 @@ import { colors, radius, shadow } from '../theme';
 import { H, PillButton, T } from './ui';
 import { promptInstall } from '../install';
 
-/** Asked once, after your third call: put bondi on the home screen so it opens full screen. */
+/** Asked once, after your third call: put LetsJam on the home screen so it opens full screen. */
 export function InstallSheet({ kind, onDone }: { kind: 'prompt' | 'ios'; onDone: (installed: boolean) => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <View style={styles.scrim}>
       <View style={styles.card}>
-        <Image source={{ uri: 'icon-192.png' }} style={styles.icon} accessibilityLabel="bondi app icon" />
-        <H size={28} style={{ textAlign: 'center' }}>put bondi on your home screen</H>
+        <Image source={{ uri: 'icon-192.png' }} style={styles.icon} accessibilityLabel="LetsJam app icon" />
+        <H size={28} style={{ textAlign: 'center' }}>put LetsJam on your home screen</H>
         <T weight="semi" color={colors.muted} style={{ textAlign: 'center' }}>opens full screen like an app, and your daily coins are one tap away. no app store, nothing to download.</T>
         {kind === 'ios' ? (
           <View style={styles.steps}>

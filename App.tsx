@@ -171,7 +171,7 @@ function Shell() {
     setDare(null);
   }, [dare, ageOk, setup]);
 
-  // After your third call, once: offer to put bondi on the home screen (web on a phone only).
+  // After your third call, once: offer to put LetsJam on the home screen (web on a phone only).
   useEffect(() => {
     if (installAsked.current !== false || stats.bets < 3 || installOpen) return;
     const kind = installKind();
@@ -182,7 +182,7 @@ function Shell() {
   const installDone = (installed: boolean) => {
     setInstallOpen(null);
     AsyncStorage.setItem(INSTALL_KEY, '1').catch(() => {});
-    if (installed) setToast({ id: Date.now(), text: 'bondi is on your home screen 🎉' });
+    if (installed) setToast({ id: Date.now(), text: 'LetsJam is on your home screen 🎉' });
   };
 
   // Desktop: arrow keys or j/k move through the feed.
@@ -255,7 +255,7 @@ function Shell() {
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} />}
         {!CLIPS_LIVE && tab === 'feed' && <ClipsSoon topInset={insets.top} onPools={() => setTab('pools')} onInvite={async () => {
-          const r = await shareText(`come play bondi with me. friend pools with free coins, no cash. we both get 500 coins.`, inviteLink());
+          const r = await shareText(`come play LetsJam with me. friend pools with free coins, no cash. we both get 500 coins.`, inviteLink());
           if (r !== 'dismissed') recordShare();
           if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
         }} />}
@@ -275,7 +275,7 @@ function Shell() {
                   balance={balance} placeBet={placeBet} onNext={() => next(index)} />
               )}
               ListFooterComponent={<FeedEnd height={height} onPools={() => setTab('pools')} onCreate={() => setTab('create')} onInvite={async () => {
-                const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. we both get 500 coins.`, inviteLink());
+                const r = await shareText(`come play LetsJam with me. guess what happens next, free coins, no cash. we both get 500 coins.`, inviteLink());
                 if (r !== 'dismissed') recordShare();
                 if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
               }} />}

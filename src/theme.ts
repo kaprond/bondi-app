@@ -1,4 +1,4 @@
-/** Bondi brand tokens, taken from bondi.framer.ai. Main colour #0095B6. */
+/** LetsJam brand tokens (carried over from bondi.framer.ai). Main colour #0095B6. */
 export const colors = {
   brand: '#0095B6',      // main
   brandSoft: '#33AAC5',  // headings, secondary buttons on the site

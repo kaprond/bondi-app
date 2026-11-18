@@ -199,7 +199,7 @@ export function befriendInviter(handle: string, opts: { request?: boolean } = {}
   let p = Object.values(people).find((x) => x.id !== ME && x.handle === h);
   if (!p) {
     const n = [...h].reduce((a, c) => a + c.charCodeAt(0), 0);
-    p = { id: `u:${h}`, handle: h, name: h.split(/[._]/)[0] || h, emoji: AVATAR_EMOJI[n % AVATAR_EMOJI.length], color: AVATAR_COLORS[n % AVATAR_COLORS.length], bio: 'brought you to bondi', city: '', stats: { calls: 0, hitRate: 0, poolsWon: 0, bestStreak: 0 } };
+    p = { id: `u:${h}`, handle: h, name: h.split(/[._]/)[0] || h, emoji: AVATAR_EMOJI[n % AVATAR_EMOJI.length], color: AVATAR_COLORS[n % AVATAR_COLORS.length], bio: 'brought you to LetsJam', city: '', stats: { calls: 0, hitRate: 0, poolsWon: 0, bestStreak: 0 } };
     people[p.id] = p;
   }
   incoming.delete(p.id); outgoing.delete(p.id); friends.add(p.id);

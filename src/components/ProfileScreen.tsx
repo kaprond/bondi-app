@@ -105,7 +105,7 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }:
           ))}
         </View>
 
-        <Pressable onPress={async () => { if ((await shareText(`come play bondi with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
+        <Pressable onPress={async () => { if ((await shareText(`come play LetsJam with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
           <T size={30}>💌</T>
           <View style={{ flex: 1 }}>
             <T weight="bold" color={colors.white}>invite friends, get 500 coins each</T>
@@ -116,11 +116,11 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }:
 
         <View style={styles.card}>
           <Eyebrow label="play it cool" />
-          <T weight="semi" color={colors.deep}>bondi is free to play. coins can’t be bought or cashed out, and there are no prizes with money value.</T>
+          <T weight="semi" color={colors.deep}>LetsJam is free to play. coins can’t be bought or cashed out, and there are no prizes with money value.</T>
           <View style={styles.row}><Ionicons name="time-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>take a break reminder after 30 minutes</T></View>
           <View style={styles.row}><Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>every outcome is locked and hashed before a clip goes live</T></View>
         </View>
-        <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>made with 💙 by bondi</T>
+        <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>made with 💙 by LetsJam</T>
       </View>
     </ScrollView>
   );
