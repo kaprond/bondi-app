@@ -5,17 +5,18 @@ import { colors, radius } from '../theme';
 import { H, PillButton, T, Wordmark } from './ui';
 
 export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAccept: () => void; topInset: number; bottomInset: number; invitedBy?: string }) {
+  // launch: friend pools first, clips come later
   const steps: [keyof typeof Ionicons.glyphMap, string][] = [
-    ['play', 'watch a short clip'],
-    ['pause', 'it pauses right before the moment'],
-    ['hand-left', 'call what happens next with free coins'],
+    ['people', 'start a pool with your crew'],
+    ['help-circle', 'ask anything: who wins, who’s late, who caves'],
+    ['trophy', 'call it with free coins. winners split the pot'],
   ];
   return (
     <LinearGradient colors={[colors.sky, colors.brand]} style={[styles.wrap, { paddingTop: topInset + 24, paddingBottom: bottomInset + 24 }]}>
       <Wordmark size={44} />
       <View style={{ gap: 10 }}>
         <H size={52} color={colors.white}>guess what{'\n'}happens <H size={52} color={colors.yellow}>next</H></H>
-        <T weight="semi" size={17} color={colors.white}>short clips, one big question. call it right and stack your coins.</T>
+        <T weight="semi" size={17} color={colors.white}>friend pools on anything. call it right and stack your coins.</T>
       </View>
       {invitedBy && (
         <View style={styles.invite}>

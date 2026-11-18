@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fonts, radius, shadow } from '../theme';
 
 export function Wordmark({ size = 30, color = colors.white }: { size?: number; color?: string }) {
-  return <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size, color, letterSpacing: -size * 0.03, lineHeight: size * 1.15 }}>bondi</Text>;
+  return <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size, color, letterSpacing: -size * 0.03, lineHeight: size * 1.15 }}>letsjam</Text>;
 }
 
 export function H({ size = 28, color = colors.deep, style, ...rest }: TextProps & { size?: number; color?: string }) {
@@ -59,7 +59,7 @@ export function Eyebrow({ label, tone = 'brand' }: { label: string; tone?: 'bran
 export function Coin({ size = 16 }: { size?: number }) {
   return (
     <LinearGradient colors={['#FFE98A', colors.sun]} style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E9B800' }}>
-      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size * 0.62, color: '#9A6B00', lineHeight: size * 0.8 }}>b</Text>
+      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size * 0.62, color: '#9A6B00', lineHeight: size * 0.8 }}>j</Text>
     </LinearGradient>
   );
 }

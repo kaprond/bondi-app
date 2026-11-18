@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../avatar';
@@ -11,11 +11,15 @@ import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLi
 import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
+import { blockedList, deleteAccount, refreshBlocks, unblockUser, useBlocks } from '../safety';
 
-interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void }
+interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void; onDeleted: () => void }
 
-export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }: Props) {
+export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, onDeleted }: Props) {
   useSocial();
+  useBlocks();
+  useEffect(() => { refreshBlocks(); }, []);
+  const blocked = blockedList();
   const s = useStats();
   const p = me();
   const [editing, setEditing] = useState(false);
@@ -105,7 +109,7 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }:
           ))}
         </View>
 
-        <Pressable onPress={async () => { if ((await shareText(`come play bondi with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
+        <Pressable onPress={async () => { if ((await shareText(`come play LetsJam with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
           <T size={30}>💌</T>
           <View style={{ flex: 1 }}>
             <T weight="bold" color={colors.white}>invite friends, get 500 coins each</T>
@@ -116,13 +120,51 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends }:
 
         <View style={styles.card}>
           <Eyebrow label="play it cool" />
-          <T weight="semi" color={colors.deep}>bondi is free to play. coins can’t be bought or cashed out, and there are no prizes with money value.</T>
+          <T weight="semi" color={colors.deep}>LetsJam is free to play. coins can’t be bought or cashed out, and there are no prizes with money value.</T>
           <View style={styles.row}><Ionicons name="time-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>take a break reminder after 30 minutes</T></View>
           <View style={styles.row}><Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>every outcome is locked and hashed before a clip goes live</T></View>
         </View>
-        <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>made with 💙 by bondi</T>
+        {blocked.length > 0 && (
+          <View style={styles.card}>
+            <Eyebrow label="blocked" />
+            {blocked.map((b) => (
+              <View key={b.id} style={styles.row}>
+                <T weight="semi" color={colors.deep} style={{ flex: 1 }}>{b.emoji} @{b.handle}</T>
+                <Pressable onPress={() => unblockUser(b.id)} accessibilityRole="button" accessibilityLabel={`unblock ${b.handle}`}>
+                  <T weight="bold" color={colors.brand}>unblock</T>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <DeleteAccount onDeleted={onDeleted} />
+        <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>made with 💙 by LetsJam</T>
       </View>
     </ScrollView>
+  );
+}
+
+/** Two taps, no dialog: tap once to see what goes, tap again to delete for good. */
+function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
+  const [step, setStep] = useState<'idle' | 'confirm' | 'busy'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  if (step === 'idle') return (
+    <Pressable onPress={() => setStep('confirm')} style={{ alignSelf: 'center', paddingVertical: 6 }} accessibilityRole="button">
+      <T size={13} weight="bold" color={colors.muted}>delete my account</T>
+    </Pressable>
+  );
+  return (
+    <View style={[styles.card, { borderWidth: 2, borderColor: colors.orange }]}>
+      <H size={22} color={colors.deep}>delete your account?</H>
+      <T weight="semi" color={colors.deep}>this wipes your profile, coins, friends and pool history for good. pools you started that aren’t settled yet get cancelled and everyone gets their coins back. you can’t undo this.</T>
+      {error && <T size={13} weight="semi" color={colors.orange}>{error}</T>}
+      <PillButton label="yes, delete everything" variant="orange" busy={step === 'busy'} onPress={async () => {
+        setStep('busy'); setError(null);
+        try { await deleteAccount(); onDeleted(); } catch (e) { setError((e as Error).message); setStep('confirm'); }
+      }} />
+      <PillButton label="keep my account" variant="ghost" disabled={step === 'busy'} onPress={() => setStep('idle')} />
+    </View>
   );
 }
 

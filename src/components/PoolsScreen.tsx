@@ -11,6 +11,7 @@ import { crewList, me, useSocial } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
+import { ReportSheet } from './ReportSheet';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
 onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
@@ -311,8 +312,10 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
   const total = Math.max(p.entries.length, 1);
   const pot = p.entries.length * p.stake;
   const winnerId = p.resolvedOptionId ?? p.proposedOptionId;
+  const [reporting, setReporting] = useState(false);
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={styles.page} contentContainerStyle={styles.body}>
       <View style={styles.inBar}>{renderBar('light')}</View>
       <BackBar label="pools" onBack={onBack} />
@@ -386,7 +389,14 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
       {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}
       {p.status === 'voided' && <View style={styles.notice}><T weight="semi" color={colors.deep}>no majority confirmed, so the pool was cancelled and everyone got their coins back.</T></View>}
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
+      {p.createdBy !== ME && (
+        <Pressable onPress={() => setReporting(true)} style={{ alignSelf: 'center', paddingVertical: 6 }} accessibilityRole="button">
+          <T size={13} weight="bold" color={colors.muted}>report this pool</T>
+        </Pressable>
+      )}
     </ScrollView>
+    {reporting && <ReportSheet poolId={p.id} userId={p.createdBy} onClose={() => setReporting(false)} onBlocked={onBack} />}
+    </View>
   );
 }
 

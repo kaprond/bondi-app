@@ -27,7 +27,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
   const board = [...friends, me()].sort((a, b) => b.stats.hitRate - a.stats.hitRate || b.stats.calls - a.stats.calls);
 
   async function invite() {
-    const r = await shareText(`come play bondi with me. guess what happens next, free coins, no cash. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink());
+    const r = await shareText(`come play LetsJam with me. guess what happens next, free coins, no cash. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink());
     setCopied(r === 'copied' ? 'link copied' : r === 'shared' ? 'sent!' : null);
     if (r !== 'dismissed') recordShare();
     if (r !== 'dismissed') setTimeout(() => setCopied(null), 2000);
@@ -42,7 +42,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
         <View style={styles.band}>
           <Eyebrow label={`${friends.length} friends`} tone="white" />
           <H size={40} color={colors.white}>your <H size={40} color={colors.yellow}>people</H></H>
-          <T weight="semi" color={colors.white} size={16}>bondi is better with the besties. invite them and you both get 500 coins.</T>
+          <T weight="semi" color={colors.white} size={16}>LetsJam is better with the besties. invite them and you both get 500 coins.</T>
           <View style={styles.inviteRow}>
             <View style={styles.code}>
               <T size={12} weight="bold" color={colors.muted}>your code</T>

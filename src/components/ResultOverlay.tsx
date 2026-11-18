@@ -40,7 +40,7 @@ export function ResultOverlay({ clip, result, stake, streak, dare, onDare, onNex
 
   async function brag() {
     const r = await shareBrag({ question: clip.question, answer: label, net, crowd, streak, link: inviteLink(),
-      text: `called it on bondi: “${clip.question}” → “${label}”. +${net} coins. bet you can’t. code ${inviteCode()}` });
+      text: `called it on LetsJam: “${clip.question}” → “${label}”. +${net} coins. bet you can’t. code ${inviteCode()}` });
     if (r === 'dismissed') return;
     recordShare();
     if (r === 'saved') toast('brag card saved, link copied');

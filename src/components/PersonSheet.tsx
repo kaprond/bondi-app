@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../avatar';
-import { crewList, person, relation, removeFriend, useSocial } from '../social';
+import { crewList, ME, person, relation, removeFriend, useSocial } from '../social';
+import { ReportSheet } from './ReportSheet';
 import { colors, radius, shadow } from '../theme';
 import { H, PillButton, T } from './ui';
 import { RelationButton } from './FriendsScreen';
@@ -12,6 +13,7 @@ export function PersonSheet({ id, onClose, onPoolWith }: { id: string; onClose: 
   useSocial();
   const p = person(id);
   const rel = relation(id);
+  const [reporting, setReporting] = useState(false);
   const y = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.spring(y, { toValue: 1, useNativeDriver: Platform.OS !== 'web', damping: 16, stiffness: 180 }).start(); }, [y]);
   const shared = crewList().filter((c) => c.memberIds.includes(id));
@@ -49,7 +51,13 @@ export function PersonSheet({ id, onClose, onPoolWith }: { id: string; onClose: 
         ) : (
           <T size={13} color={colors.muted} style={{ textAlign: 'center' }}>once you’re friends you can add {p.name} to crews and pools.</T>
         )}
+        {id !== ME && (
+          <Pressable onPress={() => setReporting(true)} style={{ alignSelf: 'center' }} accessibilityRole="button">
+            <T size={13} weight="bold" color={colors.muted}>report or block @{p.handle}</T>
+          </Pressable>
+        )}
       </Animated.View>
+      {reporting && <ReportSheet userId={id} onClose={() => setReporting(false)} onBlocked={onClose} />}
     </View>
   );
 }
