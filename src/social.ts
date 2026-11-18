@@ -19,18 +19,18 @@ export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none';
 
 export const ME = 'me';
 export const AVATAR_EMOJI = ['😎', '🦊', '🐙', '🛵', '🌊', '🍕', '🎧', '🐸', '🦄', '🔥', '🌵', '🏄'];
-export const AVATAR_COLORS = ['#0095B6', '#FFD639', '#E16632', '#2433A0', '#8FD3E3', '#14B87A', '#FF8FB1', '#005264'];
+export const AVATAR_COLORS = ['#0095B6', '#F9C500', '#E16632', '#28275F', '#8FD3E3', '#14B87A', '#FF8FB1', '#005264'];
 
 const people: Record<string, Person> = {
   me:     { id: ME, handle: 'you', name: 'you', emoji: '😎', color: '#0095B6', bio: 'calling it since day one', city: 'amsterdam', stats: { calls: 0, hitRate: 0, poolsWon: 0, bestStreak: 0 } },
-  alex:   { id: 'alex', handle: 'alex.vdb', name: 'alex', emoji: '🦊', color: '#FFD639', bio: 'padel, plants, bad puns', city: 'amsterdam', stats: { calls: 142, hitRate: 57, poolsWon: 9, bestStreak: 7 } },
+  alex:   { id: 'alex', handle: 'alex.vdb', name: 'alex', emoji: '🦊', color: '#F9C500', bio: 'padel, plants, bad puns', city: 'amsterdam', stats: { calls: 142, hitRate: 57, poolsWon: 9, bestStreak: 7 } },
   sam:    { id: 'sam', handle: 'samsam', name: 'sam', emoji: '🍕', color: '#E16632', bio: 'never late. mostly.', city: 'utrecht', stats: { calls: 88, hitRate: 49, poolsWon: 4, bestStreak: 5 } },
-  jordan: { id: 'jordan', handle: 'jrdn', name: 'jordan', emoji: '🎧', color: '#2433A0', bio: 'dj on weekends', city: 'rotterdam', stats: { calls: 203, hitRate: 61, poolsWon: 12, bestStreak: 11 } },
+  jordan: { id: 'jordan', handle: 'jrdn', name: 'jordan', emoji: '🎧', color: '#28275F', bio: 'dj on weekends', city: 'rotterdam', stats: { calls: 203, hitRate: 61, poolsWon: 12, bestStreak: 11 } },
   taylor: { id: 'taylor', handle: 'tay', name: 'taylor', emoji: '🌊', color: '#8FD3E3', bio: 'surf, coffee, repeat', city: 'scheveningen', stats: { calls: 67, hitRate: 52, poolsWon: 3, bestStreak: 4 } },
   noor:   { id: 'noor', handle: 'noor.k', name: 'noor', emoji: '🦄', color: '#FF8FB1', bio: 'board game queen', city: 'amsterdam', stats: { calls: 51, hitRate: 55, poolsWon: 2, bestStreak: 6 } },
   mila:   { id: 'mila', handle: 'milaaa', name: 'mila', emoji: '🐸', color: '#14B87A', bio: 'running club captain', city: 'haarlem', stats: { calls: 119, hitRate: 58, poolsWon: 6, bestStreak: 8 } },
   daan:   { id: 'daan', handle: 'daan_rides', name: 'daan', emoji: '🛵', color: '#0095B6', bio: 'ex bondi rider', city: 'amsterdam', stats: { calls: 34, hitRate: 44, poolsWon: 1, bestStreak: 3 } },
-  lotte:  { id: 'lotte', handle: 'lotte', name: 'lotte', emoji: '🌵', color: '#FFD639', bio: 'plant mum, quiz night regular', city: 'leiden', stats: { calls: 76, hitRate: 60, poolsWon: 5, bestStreak: 9 } },
+  lotte:  { id: 'lotte', handle: 'lotte', name: 'lotte', emoji: '🌵', color: '#F9C500', bio: 'plant mum, quiz night regular', city: 'leiden', stats: { calls: 76, hitRate: 60, poolsWon: 5, bestStreak: 9 } },
   finn:   { id: 'finn', handle: 'finnster', name: 'finn', emoji: '🏄', color: '#005264', bio: 'will bet on the weather', city: 'den haag', stats: { calls: 22, hitRate: 41, poolsWon: 0, bestStreak: 2 } },
 };
 

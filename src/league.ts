@@ -6,7 +6,7 @@
 export const TIERS = [
   { name: 'bronze', emoji: '🥉', color: '#C98A4B' },
   { name: 'silver', emoji: '🥈', color: '#9FB3BC' },
-  { name: 'gold', emoji: '🥇', color: '#FFD639' },
+  { name: 'gold', emoji: '🥇', color: '#F9C500' },
   { name: 'diamond', emoji: '💎', color: '#8FD3E3' },
 ] as const;
 export const LEAGUE_SIZE = 20;
@@ -40,7 +40,7 @@ function rng(seed: string) {
 
 const NAMES = ['bram', 'fenna', 'yara', 'luuk', 'sanne', 'mo', 'ilse', 'thijs', 'noa', 'jesse', 'roos', 'milan', 'zoë', 'ruben', 'evi', 'sem', 'lieke', 'daan.v', 'iris', 'kees', 'anouk', 'joep', 'femke', 'stijn', 'nina', 'tim', 'eva', 'bas'];
 const EMOJI = ['🦊', '🐙', '🛵', '🌊', '🍕', '🎧', '🐸', '🦄', '🔥', '🌵', '🏄', '😎'];
-const COLORS = ['#0095B6', '#FFD639', '#E16632', '#2433A0', '#8FD3E3', '#14B87A', '#FF8FB1', '#005264'];
+const COLORS = ['#0095B6', '#F9C500', '#E16632', '#28275F', '#8FD3E3', '#14B87A', '#FF8FB1', '#005264'];
 
 export interface Row { id: string; name: string; emoji?: string; color?: string; won: number; you?: boolean; friend?: boolean; rank: number }
 

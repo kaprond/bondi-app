@@ -34,7 +34,7 @@ function draw(b: BragInput): HTMLCanvasElement {
   g.fillStyle = '#0095B6'; g.fillText(label, 120, 775);
 
   // coins
-  g.fillStyle = '#FFD639'; g.beginPath(); g.arc(150, 960, 62, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#F9C500'; g.beginPath(); g.arc(150, 960, 62, 0, Math.PI * 2); g.fill();
   g.fillStyle = '#E8B800'; g.beginPath(); g.arc(150, 960, 46, 0, Math.PI * 2); g.fill();
   g.fillStyle = '#fff'; g.font = `60px ${D}`; g.textAlign = 'center'; g.fillText('b', 150, 982); g.textAlign = 'left';
   g.fillStyle = '#fff'; g.font = `150px ${D}`; g.fillText(`+${b.net}`, 240, 1010);

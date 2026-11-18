@@ -1,19 +1,22 @@
-/** LetsJam brand tokens (carried over from bondi.framer.ai). Main colour #0095B6. */
+/** LetsJam brand tokens. Brand palette: #051320 #0095B6 #FFFFFF #FFF000 #1765A9 #28275F #E16632 #F9C500 #224C89.
+ *  Everything else here (soft/sky/deep/cloud/tint/line/muted/win) is a tint or a functional colour derived from it. */
 export const colors = {
   brand: '#0095B6',      // main
   brandSoft: '#33AAC5',  // headings, secondary buttons on the site
   sky: '#54B8CE',        // full-width section background
   deep: '#005264',       // heading text on teal
-  ink: '#262626',
+  ink: '#051320',        // palette: near-black navy
   muted: '#6B7C82',
   cloud: '#F1F9FB',      // page background (teal-tinted white)
   tint: '#E3F4F8',       // selected surfaces
   line: '#D5ECF2',
   white: '#FFFFFF',
   yellow: '#FFF000',     // highlight word
-  sun: '#FFD639',
+  sun: '#F9C500',        // palette: gold (coins)
   orange: '#E16632',     // promo / loss
-  royal: '#2433A0',
+  royal: '#28275F',      // palette: indigo (challenge card)
+  blue: '#1765A9',       // palette
+  navy: '#224C89',       // palette
   win: '#14B87A',
   scrim: 'rgba(0, 30, 38, 0.55)',
 };
