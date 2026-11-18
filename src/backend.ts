@@ -35,6 +35,9 @@ export function ensureSession(): Promise<string> {
   return session;
 }
 
+/** Forget the cached session (after deleting your account). The next call signs in fresh. */
+export function resetSession() { session = null; }
+
 /** Calls an RPC after making sure you're signed in. Throws the server's message. */
 export async function rpc<T = unknown>(fn: string, args?: Record<string, unknown>): Promise<T> {
   await ensureSession();

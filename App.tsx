@@ -229,10 +229,25 @@ function Shell() {
     } catch { /* code already used: still friends */ }
   };
 
+  // After deleting: the web reloads into a fresh welcome screen; the native app asks to be reopened
+  // (all in-memory caches belong to the old account).
+  const [deleted, setDeleted] = useState(false);
+  const accountDeleted = () => {
+    if (Platform.OS === 'web') { try { (globalThis as { location?: Location }).location?.replace('/'); return; } catch { /* fall through */ } }
+    setDeleted(true);
+  };
+
   const onViewable = useRef(({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
     if (viewableItems[0]?.index != null) setActiveIndex(viewableItems[0].index);
   }).current;
 
+  if (deleted) return (
+    <View style={[styles.end, { flex: 1 }]}>
+      <T size={44}>👋</T>
+      <H size={34} color={colors.white} style={{ textAlign: 'center' }}>your account is gone</H>
+      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>everything’s deleted. close LetsJam and open it again if you ever want to start fresh.</T>
+    </View>
+  );
   if (ageOk === null) return <View style={{ flex: 1, backgroundColor: colors.brand }} />;
   if (!ageOk) return <Welcome topInset={insets.top} bottomInset={insets.bottom} invitedBy={invite?.from} onAccept={welcomeDone} />;
 
@@ -253,7 +268,7 @@ function Shell() {
         {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} onBalance={async () => setBalance(await api.getBalance())} />}
         {tab === 'create' && <CreatorScreen renderBar={renderBar} onBalance={setBalance} />}
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
-        {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} />}
+        {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} onDeleted={accountDeleted} />}
         {!CLIPS_LIVE && tab === 'feed' && <ClipsSoon topInset={insets.top} onPools={() => setTab('pools')} onInvite={async () => {
           const r = await shareText(`come play LetsJam with me. friend pools with free coins, no cash. we both get 500 coins.`, inviteLink());
           if (r !== 'dismissed') recordShare();
