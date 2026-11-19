@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, LayoutChangeEvent, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Invite, parseInvite, parseOpen } from './src/deeplink';
+import { FlatList, LayoutChangeEvent, Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +70,18 @@ function Shell() {
   const [balance, setBalance] = useState(0);
   const [daily, setDaily] = useState<Daily | null>(null);
   const [showDaily, setShowDaily] = useState(false);
-  const [invite] = useState(readInvite);
+  const [invite, setInvite] = useState(readInvite);
+  // App: links (universal links / letsjam://) open straight in here, cold start or while running
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const handle = (u: string | null | undefined) => {
+      const i = parseInvite(u); if (i) { setInvite(i); return; }
+      const o = parseOpen(u); if (o) { setTab('pools'); if (o.poolId) setOpenPool({ id: o.poolId, n: Date.now() }); }
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => handle(url));
+    return () => sub.remove();
+  }, []);
   const [dare, setDare] = useState<Dare | null>(() => (CLIPS_LIVE ? readDare() : null));
   const [activeIndex, setActiveIndex] = useState(0);
   const [height, setHeight] = useState(0);
@@ -172,10 +184,10 @@ function Shell() {
   useEffect(() => { if (ageOk) track('app_open'); }, [ageOk]);
 
   // Opened from a crew invite link: join the crew, become friends with whoever shared it.
-  const joinedCrew = useRef(false);
+  const joinedCrew = useRef<string | null>(null);
   useEffect(() => {
-    if (!invite?.crew || joinedCrew.current || ageOk !== true || setup || !LIVE) return;
-    joinedCrew.current = true;
+    if (!invite?.crew || joinedCrew.current === invite.crew || ageOk !== true || setup || !LIVE) return;
+    joinedCrew.current = invite.crew;
     track('crew_link_opened');
     rpc('join_crew_link', { p_group: invite.crew, p_code: invite.code })
       .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew. start a pool or jump into one 🔥` }); })
@@ -183,10 +195,10 @@ function Shell() {
   }, [invite, ageOk, setup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opened from a shared pool link: join that pool's crew and open the pool.
-  const joinedPool = useRef(false);
+  const joinedPool = useRef<string | null>(null);
   useEffect(() => {
-    if (!invite?.pool || joinedPool.current || ageOk !== true || setup || !LIVE) return;
-    joinedPool.current = true;
+    if (!invite?.pool || joinedPool.current === invite.pool || ageOk !== true || setup || !LIVE) return;
+    joinedPool.current = invite.pool;
     track('pool_link_opened');
     rpc('join_pool_link', { p_pool: invite.pool, p_code: invite.code })
       .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setOpenPool({ id: invite.pool!, n: Date.now() }); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew now. make your call` }); })
@@ -396,16 +408,10 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
   );
 }
 
-/** ?i=JAM-XXXX&from=handle from a friend's invite link (web). */
-function readInvite(): { code: string; from: string; pool?: string; crew?: string } | null {
+/** ?i=JAM-XXXX&from=handle from a friend's invite link (web; the app reads links in Shell). */
+function readInvite(): Invite | null {
   if (Platform.OS !== 'web') return null;
-  try {
-    const q = new URLSearchParams((globalThis as { location?: Location }).location?.search ?? '');
-    const code = (q.get('i') ?? '').toUpperCase(), from = (q.get('from') ?? '').replace(/[^a-z0-9._]/gi, '').toLowerCase();
-    const pool = (q.get('pool') ?? '').toLowerCase(), crew = (q.get('crew') ?? '').toLowerCase();
-    const uuid = (s: string) => (/^[0-9a-f-]{36}$/.test(s) ? s : undefined);
-    return /^(BND|JAM)-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
-  } catch { return null; }
+  try { return parseInvite((globalThis as { location?: Location }).location?.href); } catch { return null; }
 }
 function clearInviteFromUrl() {
   if (Platform.OS !== 'web') return;

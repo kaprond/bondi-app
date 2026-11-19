@@ -19,6 +19,8 @@ import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { ReportSheet } from './ReportSheet';
 import { dismissPushOffer, enablePush, shouldOfferPush } from '../push';
+import { askForRatingAfterWin } from '../rate';
+import { syncWidget } from '../widget';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
 onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
@@ -62,6 +64,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
   const refresh = () => { setTick((t) => t + 1); onBalance(); };
   useClock();
   const pools = store.list();
+  useEffect(() => { syncWidget(pools); });
   const crews = crewList();
   // Live: re-render and re-read the balance whenever the server sync lands.
   useEffect(() => store.subscribe(refresh), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -494,6 +497,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
   const [reporting, setReporting] = useState<{ userId: string } | null>(null);
   const closed = isClosed(p);
   useClock();
+  const iWon = p.status === 'resolved' && !!mine && mine.optionId === p.resolvedOptionId;
+  useEffect(() => { if (iWon) askForRatingAfterWin(); }, [iWon]);
 
   return (
     <View style={{ flex: 1 }}>

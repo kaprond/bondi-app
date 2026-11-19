@@ -36,6 +36,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/.well-known/apple-app-site-association",
+      "destination": "/api/aasa"
+    },
+    {
       "source": "/p/:id",
       "destination": "/api/pool?id=:id"
     },

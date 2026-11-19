@@ -13,7 +13,10 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:app.letsjamnow.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -65,6 +68,25 @@
         "expo-notifications",
         {
           "color": "#28275F"
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "OpenPools",
+              "displayName": "Open pools",
+              "description": "Your live pools and how long until they close.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium"
+                ]
+              },
+              "android": null
+            }
+          ]
         }
       ]
     ],
