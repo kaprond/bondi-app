@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { wallet } from '../api';
@@ -6,8 +6,11 @@ import { onHydrate, save } from '../persist';
 import { Avatar } from '../avatar';
 import { CATEGORIES, Challenge, randomChallenge } from '../challenges';
 import { blockedTopic } from '../moderation';
-import { createLivePoolsStore, createPoolsStore, LIVE, ME, nameOf, Pool, PoolOption } from '../pools';
-import { APP_URL, crewList, inviteCode, me, useSocial } from '../social';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createLivePoolsStore, createPoolsStore, isClosed, LIVE, ME, nameOf, Pool, PoolOption, timeLeft } from '../pools';
+import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, useSocial } from '../social';
+import { REACTIONS, useThread } from '../thread';
+import { track } from '../track';
 import { shareText } from '../share';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
@@ -24,6 +27,28 @@ export const refreshPools = () => { if ('refresh' in store) (store as { refresh:
 /** How many pools you're in or made (for the add-to-home-screen nudge). */
 export const poolCount = () => store.list().length;
 type Draft = Challenge & { crew: string };
+/** Re-render every 30s so countdowns stay fresh. */
+function useClock() {
+  const [, set] = useState(0);
+  useEffect(() => { const t = setInterval(() => set((n) => n + 1), 30000); return () => clearInterval(t); }, []);
+}
+const DEADLINES: { label: string; mins?: number }[] = [
+  { label: 'no deadline' }, { label: '1 hour', mins: 60 }, { label: 'tonight', mins: -1 }, { label: '24 hours', mins: 1440 }, { label: '3 days', mins: 4320 }, { label: '1 week', mins: 10080 },
+];
+/** 'tonight' = 23:00 today, or 23:00 tomorrow if that's less than an hour away. */
+function deadlineAt(mins?: number): string | undefined {
+  if (mins === undefined) return undefined;
+  if (mins > 0) return new Date(Date.now() + mins * 60000).toISOString();
+  const d = new Date(); d.setHours(23, 0, 0, 0);
+  if (d.getTime() - Date.now() < 3600000) d.setDate(d.getDate() + 1);
+  return d.toISOString();
+}
+async function shareCrew(c: Crew) {
+  const r = await shareText(`${c.emoji} join ${c.name} on LetsJam. we call stuff, put free coins on it, winner gets bragging rights:`, crewInviteLink(c.id));
+  if (r !== 'dismissed') track('invite_shared', { what: 'crew' });
+  return r !== 'dismissed';
+}
+
 type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string };
 
 /** `intent` asks the screen to open "create" with a challenge about one friend (from their profile). */
@@ -33,6 +58,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
   const [view, setView] = useState<View_>({ kind: 'list' });
   const [tab, setTab] = useState<'active' | 'done'>('active');
   const refresh = () => { setTick((t) => t + 1); onBalance(); };
+  useClock();
   const pools = store.list();
   const crews = crewList();
   // Live: re-render and re-read the balance whenever the server sync lands.
@@ -71,17 +97,21 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
             <Ionicons name="add" size={26} color={colors.brand} />
           </Pressable>
           {crews.map((g) => (
-            <View key={g.id} style={styles.groupItem}>
+            <Pressable key={g.id} style={styles.groupItem} onPress={() => shareCrew(g)} accessibilityRole="button" accessibilityLabel={`invite friends to ${g.name}`}>
               <View style={styles.groupAvatar}><T size={22}>{g.emoji}</T></View>
-              <T weight="bold" size={13} color={colors.white}>{g.name}</T>
-            </View>
+              <T weight="bold" size={13} color={colors.white}>{g.name} · {g.memberIds.length}</T>
+            </Pressable>
           ))}
         </ScrollView>
       </View></BlobHeader>
 
       <View style={styles.body}>
+        <FirstRun crews={crews} poolCount={pools.length} onFirstPool={(crew) => {
+          try { const c = randomChallenge({ crewMemberIds: crew.memberIds, city: me().city }); setView({ kind: 'create', draft: { ...c, crew: crew.name } }); }
+          catch { setView({ kind: 'create' }); }
+        }} />
         <PushOffer />
-        <ChallengeCard onUse={(draft) => setView({ kind: 'create', draft })} />
+        {crews.length > 0 && <ChallengeCard onUse={(draft) => setView({ kind: 'create', draft })} />}
 
         <View style={styles.segment}>
           {(['active', 'done'] as const).map((t) => (
@@ -95,7 +125,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
           <Pressable key={p.id} style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.99 }] }]} onPress={() => setView({ kind: 'detail', id: p.id })}>
             <View style={{ flex: 1, gap: 6 }}>
               <T weight="bold" size={16} color={colors.deep}>{p.question}</T>
-              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}</T>
+              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}</T>
               <View style={styles.faces}>
                 {p.entries.slice(0, 5).map((e, i) => <View key={e.userId} style={{ marginLeft: i ? -8 : 0 }}><Avatar id={e.userId} size={26} /></View>)}
               </View>
@@ -106,12 +136,90 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
             </View>
           </Pressable>
         ))}
-        {shown.length === 0 && <T color={colors.muted} style={{ textAlign: 'center', marginTop: 24 }}>nothing here yet.</T>}
+        {shown.length === 0 && crews.length > 0 && <T color={colors.muted} style={{ textAlign: 'center', marginTop: 24 }}>nothing here yet.</T>}
 
         <PillButton label="start a pool" onPress={() => setView({ kind: 'create' })} icon={<Ionicons name="add" size={18} color={colors.white} />} />
         <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>pools use free coins only. coins have no cash value.</T>
       </View>
     </ScrollView>
+  );
+}
+
+const FIRST_RUN_KEY = 'letsjam.firstRun';
+const CREW_EMOJI = ['🎉', '🏠', '⚽', '🎓', '🍻', '🏄', '🔥', '💼'];
+
+function Step({ n, done, title, children }: { n: number; done: boolean; title: string; children?: ReactNode }) {
+  return (
+    <View style={[styles.step, done && { opacity: 0.6 }]}>
+      <View style={[styles.stepNum, done && { backgroundColor: colors.win }]}>
+        {done ? <Ionicons name="checkmark" size={16} color={colors.white} /> : <T weight="bold" color={colors.white}>{n}</T>}
+      </View>
+      <View style={{ flex: 1, gap: 8 }}>
+        <T weight="bold" size={16} color={colors.deep}>{title}</T>
+        {!done && children}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * New players: make a crew → get people in via WhatsApp → first pool. Disappears once you've done
+ * all three (or skipped). Steps tick off from real state, so it also works for people who arrive
+ * through a crew/pool link and already have a crew.
+ */
+function FirstRun({ crews, poolCount, onFirstPool }: { crews: Crew[]; poolCount: number; onFirstPool: (c: Crew) => void }) {
+  const [state, setState] = useState<{ shared?: boolean; hidden?: boolean } | null>(null);
+  const [name, setName] = useState('');
+  const [emoji, setEmoji] = useState(CREW_EMOJI[0]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { AsyncStorage.getItem(FIRST_RUN_KEY).then((v) => setState(v ? JSON.parse(v) : {})).catch(() => setState({})); }, []);
+  const remember = (patch: { shared?: boolean; hidden?: boolean }) => setState((s) => {
+    const next = { ...s, ...patch };
+    AsyncStorage.setItem(FIRST_RUN_KEY, JSON.stringify(next)).catch(() => {});
+    return next;
+  });
+
+  const crew = crews[0];
+  const step1 = !!crew;
+  const step2 = !!state?.shared || crews.some((c) => c.memberIds.length > 1);
+  const step3 = poolCount > 0;
+  if (!state || state.hidden || (step1 && step2 && step3)) return null;
+
+  async function make() {
+    setBusy(true); setError(null);
+    try { const c = await startCrew(name || `${me().name.split(' ')[0] || 'my'}’s crew`, emoji); track('crew_created', { first_run: true }); if (await shareCrew(c)) remember({ shared: true }); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <View style={styles.firstRun}>
+      <View style={styles.between}>
+        <Eyebrow label="get your crew going" />
+        <Pressable onPress={() => { track('first_run_skipped', { step: !step1 ? 1 : !step2 ? 2 : 3 }); remember({ hidden: true }); }} hitSlop={10} accessibilityRole="button">
+          <T size={13} weight="bold" color={colors.muted}>skip</T>
+        </Pressable>
+      </View>
+      <Step n={1} done={step1} title={step1 ? `${crew.emoji} ${crew.name} is live` : 'name your crew'}>
+        <View style={styles.wrapRow}>
+          {CREW_EMOJI.map((e) => (
+            <Pressable key={e} onPress={() => setEmoji(e)} style={[styles.emojiPick, emoji === e && styles.emojiOn]} accessibilityRole="button" accessibilityState={{ selected: emoji === e }}><T size={20}>{e}</T></Pressable>
+          ))}
+        </View>
+        <TextInput style={styles.input} placeholder="house, padel boys, uni gang…" placeholderTextColor={colors.muted} value={name} onChangeText={(t) => { setName(t); setError(null); }} maxLength={24} />
+        {error && <T size={13} weight="semi" color={colors.orange}>{error}</T>}
+        <PillButton label="make it + invite on WhatsApp" busy={busy} onPress={make} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.white} />} />
+      </Step>
+      <Step n={2} done={step2} title="get your people in">
+        <T size={13} color={colors.muted}>whoever taps your link lands straight in {crew?.name ?? 'your crew'}. you’re friends automatically.</T>
+        {crew && <PillButton label="share the link" variant="ghost" onPress={async () => { if (await shareCrew(crew)) remember({ shared: true }); }} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />} />}
+      </Step>
+      <Step n={3} done={step3} title="start your first pool">
+        <T size={13} color={colors.muted}>we’ll suggest one. tweak it or roll the dice.</T>
+        {crew && <PillButton label="start a pool" onPress={() => onFirstPool(crew)} />}
+      </Step>
+    </View>
   );
 }
 
@@ -232,6 +340,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   const [subject, setSubject] = useState<string | undefined>(draft?.subjectId);
   const [group, setGroup] = useState(draft?.crew ?? crews[0]?.name ?? 'house');
   const [stake, setStake] = useState(draft?.stake ?? 50);
+  const [deadline, setDeadline] = useState(3); // 24 hours
   const [error, setError] = useState<string | null>(null);
   const [lastKey, setLastKey] = useState(draft?.key);
   const live = question.length > 6 ? blockedTopic(question) : null;
@@ -256,7 +365,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   function submit() {
     try {
       if (!question.trim()) throw new Error('write a question first.');
-      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group });
+      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineAt(DEADLINES[deadline].mins) });
       onDone(p.id);
     } catch (e) { setError((e as Error).message); }
   }
@@ -330,6 +439,12 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
         <View style={styles.wrapRow}>{STAKES.map((s) => <Chip key={s} label={`${s}`} active={stake === s} onPress={() => setStake(s)} />)}</View>
       </View>
 
+      <View style={styles.field}>
+        <T weight="bold" color={colors.deep}>closes in</T>
+        <View style={styles.wrapRow}>{DEADLINES.map((d, i) => <Chip key={d.label} label={d.label} active={deadline === i} onPress={() => setDeadline(i)} />)}</View>
+        <T size={13} color={colors.muted}>{DEADLINES[deadline].mins === undefined ? 'open until you call the result.' : 'no new picks after this. we’ll nudge the crew an hour before, and you when it’s time to call it.'}</T>
+      </View>
+
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
       <PillButton label="create pool" onPress={submit} />
       <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>not allowed: drinking, health or injury, dating, looks, danger or crime, self-harm.</T>
@@ -345,7 +460,9 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
   const total = Math.max(p.entries.length, 1);
   const pot = p.entries.length * p.stake;
   const winnerId = p.resolvedOptionId ?? p.proposedOptionId;
-  const [reporting, setReporting] = useState(false);
+  const [reporting, setReporting] = useState<{ userId: string } | null>(null);
+  const closed = isClosed(p);
+  useClock();
 
   return (
     <View style={{ flex: 1 }}>
@@ -360,6 +477,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
         <View>
           <H size={36} color={colors.white}>{pot} coins</H>
           <T weight="semi" color={colors.white}>{p.stake} each · {p.entries.length} in · {statusLabel(p)}</T>
+          {p.closesAt && p.status === 'open' && <T weight="bold" color={colors.yellow}>⏰ {closed ? 'closed for new picks' : timeLeft(p.closesAt)}</T>}
         </View>
       </View>
 
@@ -378,13 +496,13 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
         </View>
       )}
 
-      <T weight="bold" color={colors.deep}>{mine ? 'all picks' : p.status === 'open' ? `tap a pick to join for ${p.stake}` : 'all picks'}</T>
+      <T weight="bold" color={colors.deep}>{mine || closed ? 'all picks' : p.status === 'open' ? `tap a pick to join for ${p.stake}` : 'all picks'}</T>
       {p.options.map((o) => {
         const n = p.entries.filter((e) => e.optionId === o.id).length;
         const isMine = mine?.optionId === o.id;
         const isWin = winnerId === o.id && (p.status === 'resolved' || p.status === 'proposed');
         return (
-          <Pressable key={o.id} disabled={p.status !== 'open' || !!mine} onPress={() => act(() => store.join(p.id, o.id))}
+          <Pressable key={o.id} disabled={p.status !== 'open' || !!mine || closed} onPress={() => act(() => store.join(p.id, o.id))}
             style={[styles.option, isMine && styles.optionMine, isWin && styles.optionWin]} accessibilityRole="button">
             <View style={styles.optionTop}>
               {o.memberId && <Avatar id={o.memberId} size={28} />}
@@ -398,8 +516,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
       })}
 
       {p.status === 'open' && p.createdBy === ME && p.entries.length > 1 && (
-        <View style={styles.notice}>
-          <T weight="bold" color={colors.deep}>did it happen? propose the result</T>
+        <View style={[styles.notice, closed && { borderWidth: 2, borderColor: colors.sun }]}>
+          <T weight="bold" color={colors.deep}>{closed ? 'time to call it 🏁 who won?' : 'did it happen? propose the result'}</T>
           <T size={13} color={colors.muted}>everyone in the pool gets 48 hours to confirm or dispute. no majority means everyone gets their coins back.</T>
           <View style={styles.wrapRow}>{p.options.map((o) => <Chip key={o.id} label={o.label} onPress={() => act(() => store.propose(p.id, o.id))} />)}</View>
         </View>
@@ -426,18 +544,67 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
         <PillButton label="invite friends to this pool" variant="ghost" icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />}
           onPress={async () => {
             const link = `${APP_URL}/p/${p.id}?i=${inviteCode()}&from=${encodeURIComponent(me().handle)}`;
-            await shareText(`${p.question} 👀 i started a pool on LetsJam, make your call:`, link);
+            const r = await shareText(`${p.question} 👀 i started a pool on LetsJam, make your call:`, link);
+            if (r !== 'dismissed') track('pool_shared');
           }} />
       )}
+      <TrashTalk poolId={p.id} onReport={(userId) => setReporting({ userId })} />
       {p.createdBy !== ME && (
-        <Pressable onPress={() => setReporting(true)} style={{ alignSelf: 'center', paddingVertical: 6 }} accessibilityRole="button">
+        <Pressable onPress={() => setReporting({ userId: p.createdBy })} style={{ alignSelf: 'center', paddingVertical: 6 }} accessibilityRole="button">
           <T size={13} weight="bold" color={colors.muted}>report this pool</T>
         </Pressable>
       )}
     </ScrollView>
-    {reporting && <ReportSheet poolId={p.id} userId={p.createdBy} onClose={() => setReporting(false)} onBlocked={onBack} />}
+    {reporting && <ReportSheet poolId={p.id} userId={reporting.userId} onClose={() => setReporting(null)} onBlocked={reporting.userId === p.createdBy ? onBack : undefined} />}
     </View>
   );
+}
+
+/** Comments + reactions under a pool. Crew-only; blocked people's comments are hidden server-side. */
+function TrashTalk({ poolId, onReport }: { poolId: string; onReport: (userId: string) => void }) {
+  const { thread, post, remove, react } = useThread(poolId);
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const send = () => { try { post(text); setText(''); setError(null); } catch (e) { setError((e as Error).message); } };
+  const count = (e: string) => thread.reactions.find((r) => r.emoji === e);
+  return (
+    <View style={styles.notice}>
+      <T weight="bold" color={colors.deep}>trash talk {thread.comments.length ? `(${thread.comments.length})` : ''}</T>
+      <View style={styles.wrapRow}>
+        {REACTIONS.map((e) => {
+          const r = count(e);
+          return (
+            <Pressable key={e} onPress={() => react(e)} style={[styles.react, r?.mine && styles.reactOn]} accessibilityRole="button" accessibilityLabel={`react ${e}`} accessibilityState={{ selected: !!r?.mine }}>
+              <T size={16}>{e}</T>{r ? <T size={13} weight="bold" color={colors.deep}>{r.n}</T> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+      {thread.comments.length === 0 && <T size={13} color={colors.muted}>no chirps yet. say something.</T>}
+      {thread.comments.map((c) => (
+        <View key={c.id} style={styles.comment}>
+          <Avatar id={c.userId} size={28} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <T size={13} weight="bold" color={colors.deep}>{c.userId === ME ? 'you' : nameOf(c.userId)} <T size={12} color={colors.muted}>{ago(c.at)}</T></T>
+            <T color={colors.ink}>{c.body}</T>
+          </View>
+          <Pressable onPress={() => (c.userId === ME ? remove(c.id) : onReport(c.userId))} hitSlop={10} accessibilityRole="button" accessibilityLabel={c.userId === ME ? 'delete comment' : 'report comment'}>
+            <Ionicons name={c.userId === ME ? 'trash-outline' : 'flag-outline'} size={16} color={colors.muted} />
+          </Pressable>
+        </View>
+      ))}
+      <View style={styles.composer}>
+        <TextInput style={[styles.input, { flex: 1, paddingVertical: 10 }]} placeholder="talk your talk…" placeholderTextColor={colors.muted}
+          value={text} onChangeText={(t) => { setText(t); setError(null); }} maxLength={280} onSubmitEditing={send} returnKeyType="send" />
+        <Pressable onPress={send} style={styles.sendBtn} accessibilityRole="button" accessibilityLabel="send"><Ionicons name="send" size={18} color={colors.white} /></Pressable>
+      </View>
+      {error && <T size={13} weight="semi" color={colors.orange}>{error}</T>}
+    </View>
+  );
+}
+function ago(iso: string) {
+  const m = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
+  return m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : `${Math.floor(m / 1440)}d`;
 }
 
 const styles = StyleSheet.create({
@@ -479,6 +646,16 @@ const styles = StyleSheet.create({
   miniChip: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' },
   miniChipOn: { backgroundColor: colors.white, borderColor: colors.white },
   outcome: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tint, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  firstRun: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 14, borderWidth: 2, borderColor: colors.brand, ...shadow.soft },
+  step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  stepNum: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.royal, alignItems: 'center', justifyContent: 'center' },
+  emojiPick: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cloud },
+  emojiOn: { backgroundColor: colors.tint, borderWidth: 2, borderColor: colors.brand },
+  react: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.cloud, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'transparent' },
+  reactOn: { borderColor: colors.brand, backgroundColor: colors.tint },
+  comment: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  composer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
   pushCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, padding: 14, borderWidth: 2, borderColor: colors.sun, ...shadow.soft },
   pushOn: { backgroundColor: colors.brand, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   surprise: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.royal, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, ...shadow.button },

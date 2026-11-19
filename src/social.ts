@@ -44,7 +44,7 @@ let crews: Crew[] = LIVE ? [] : [
   { id: 'college', name: 'college', emoji: '🎓', memberIds: [ME, 'alex', 'jordan', 'sam', 'taylor'] },
 ];
 /** Where the web app lives. Invite links open it with ?i=<code>&from=<handle>. */
-export const APP_URL = 'https://bondi-app-one.vercel.app';
+export const APP_URL = 'https://letsjamnow.com';
 const newCode = () => 'BND-' + Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
 /** Each player gets their own code (server-side: invite_codes in 0004_social.sql). */
 let myCode = newCode();
@@ -256,6 +256,27 @@ export function createCrew(name: string, emoji: string, memberIds: string[]): Cr
   if (LIVE) remote('create_crew', { p_name: n, p_emoji: emoji, p_members: memberIds });
   return c;
 }
+/**
+ * First-run: a crew with just you, so you can invite people into it right away.
+ * Resolves with the saved crew (live: server id, so the invite link works).
+ */
+export async function startCrew(name: string, emoji: string): Promise<Crew> {
+  const n = name.trim().toLowerCase();
+  if (!n) throw new Error('give your crew a name.');
+  if (crews.some((c) => c.name === n)) throw new Error('you already have a crew with that name.');
+  if (!LIVE) {
+    const c: Crew = { id: `crew-${Date.now()}`, name: n, emoji, memberIds: [ME, ...[...friends].slice(0, 3)] };
+    crews = [...crews, c];
+    emit();
+    return c;
+  }
+  const id = await rpc<string>('create_crew', { p_name: n, p_emoji: emoji, p_members: [] });
+  await refreshSocial();
+  return crews.find((c) => c.id === id) ?? { id, name: n, emoji, memberIds: [ME] };
+}
+/** WhatsApp-able link that drops people straight into one of your crews (and makes you friends). */
+export const crewInviteLink = (crewId: string) => `${APP_URL}/c/${crewId}?i=${myCode}&from=${encodeURIComponent(people.me.handle)}`;
+
 export function addToCrew(crewId: string, id: string) {
   if (!friends.has(id)) throw new Error('you can only add friends to a crew.');
   crews = crews.map((c) => (c.id === crewId && !c.memberIds.includes(id) ? { ...c, memberIds: [...c.memberIds, id] } : c));

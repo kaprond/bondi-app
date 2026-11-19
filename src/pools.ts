@@ -2,6 +2,7 @@ import { blockedTopic } from './moderation';
 import { crewByName, ME, nameOf, refreshSocial, toLocal, toServer } from './social';
 import { ensureSession, LIVE, rpc, sb } from './backend';
 import { toast } from './bus';
+import { track } from './track';
 
 export { ME, nameOf };
 export interface PoolOption { id: string; label: string; memberId?: string }
@@ -12,6 +13,22 @@ export interface Pool {
   entries: { userId: string; optionId: string }[];
   votes: { userId: string; confirm: boolean }[];
   proposedOptionId?: string; resolvedOptionId?: string;
+  /** ISO time after which nobody can join; the creator gets a nudge to call the result. */
+  closesAt?: string;
+  comments?: number;
+}
+
+/** Deadline helpers shared by the list and the pool screen. */
+export const isClosed = (p: Pool) => !!p.closesAt && Date.parse(p.closesAt) <= Date.now();
+export function timeLeft(iso: string): string {
+  const ms = Date.parse(iso) - Date.now();
+  if (ms <= 0) return 'closed';
+  const m = Math.ceil(ms / 60000);
+  if (m < 60) return `${m}m left`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h${m % 60 ? ` ${m % 60}m` : ""} left`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h left`;
 }
 
 
@@ -58,14 +75,14 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
       seq = Math.max(seq, ...saved.map((p) => Number(p.id.slice(1)) || 0));
     },
 
-    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string }): Pool {
+    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string; closesAt?: string }): Pool {
       const topic = blockedTopic(input.question + ' ' + input.options.map((o) => o.label).join(' '));
       if (topic) throw new Error(`pools about ${topic} aren’t allowed. keep it fun for everyone.`);
       if (input.options.length < 2) throw new Error('add at least two outcomes.');
       const p: Pool = {
         id: nid(), groupName: input.groupName ?? 'house', question: input.question, stake: input.stake, createdBy: ME,
         subjectId: input.subjectId, status: input.subjectId ? 'pending_consent' : 'open',
-        options: input.options, entries: [], votes: [],
+        options: input.options, entries: [], votes: [], closesAt: input.closesAt,
       };
       pools.unshift(p);
       onChange(pools);
@@ -84,6 +101,7 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
       if (p.status !== 'open') throw new Error('this pool isn’t open.');
       if (controls(p, ME)) throw new Error('you’re part of this outcome, so you can’t stake on it.');
       if (p.entries.some((e) => e.userId === ME)) throw new Error('you’re already in.');
+      if (isClosed(p)) throw new Error('this pool closed. wait for the result.');
       if (!debit(p.stake)) throw new Error('not enough coins.');
       p.entries.push({ userId: ME, optionId });
       // Demo: friends who don't control the outcome join too
@@ -134,7 +152,7 @@ export type PoolsStore = ReturnType<typeof createPoolsStore>;
 
 type ServerPool = {
   id: string; group_id: string; group_name: string; question: string; stake: number; created_by: string; subject: string | null;
-  status: PoolStatus | 'locked'; proposed: string | null; resolved: string | null;
+  status: PoolStatus | 'locked'; proposed: string | null; resolved: string | null; closes_at?: string | null; comments?: number;
   options: { id: string; label: string; member: string | null }[];
   entries: { user: string; option: string }[]; votes: { user: string; confirm: boolean }[];
 };
@@ -145,6 +163,7 @@ const fromServer = (p: ServerPool): Pool => ({
   entries: p.entries.map((e) => ({ userId: toLocal(e.user)!, optionId: e.option })),
   votes: p.votes.map((v) => ({ userId: toLocal(v.user)!, confirm: v.confirm })),
   proposedOptionId: p.proposed ?? undefined, resolvedOptionId: p.resolved ?? undefined,
+  closesAt: p.closes_at ?? undefined, comments: Number(p.comments ?? 0),
 });
 
 /**
@@ -186,7 +205,7 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     refresh,
 
-    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string }): Pool {
+    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string; closesAt?: string }): Pool {
       const topic = blockedTopic(input.question + ' ' + input.options.map((o) => o.label).join(' '));
       if (topic) throw new Error(`pools about ${topic} aren’t allowed. keep it fun for everyone.`);
       if (input.options.length < 2) throw new Error('add at least two outcomes.');
@@ -196,11 +215,13 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
       const p: Pool = {
         id: `tmp-${Date.now()}`, groupName: crew.name, question: input.question, stake: input.stake, createdBy: ME,
         subjectId: input.subjectId, status: input.subjectId ? 'pending_consent' : 'open', options: input.options, entries: [], votes: [],
+        closesAt: input.closesAt,
       };
       pools.unshift(p);
       changed();
+      track('pool_created', { stake: input.stake, deadline: !!input.closesAt, about_friend: !!input.subjectId });
       rpc<string>('create_pool', {
-        p_group: crew.id, p_question: input.question, p_stake: input.stake, p_subject: toServer(input.subjectId) ?? null,
+        p_group: crew.id, p_closes_at: input.closesAt ?? null, p_question: input.question, p_stake: input.stake, p_subject: toServer(input.subjectId) ?? null,
         p_options: input.options.map((o) => ({ label: o.label, member: toServer(o.memberId) ?? null })),
       }).then((id) => { p.id = id; }, (e: Error) => toast(e.message)).finally(refresh);
       return p;
@@ -215,8 +236,10 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
       if (!p || p.status !== 'open') throw new Error('this pool isn’t open.');
       if (controls(p, ME)) throw new Error('you’re part of this outcome, so you can’t stake on it.');
       if (p.entries.some((e) => e.userId === ME)) throw new Error('you’re already in.');
+      if (isClosed(p)) throw new Error('this pool closed. wait for the result.');
       p.entries.push({ userId: ME, optionId });
       changed();
+      track('pool_joined');
       remote('join_pool', { p_pool: id, p_option: optionId });
     },
 
