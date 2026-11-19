@@ -17,7 +17,7 @@ const tap = () => { sfx.tick(); if (Platform.OS !== 'web') Haptics.selectionAsyn
 
 export function BetSheet({ clip, balance, onPlace }: Props) {
   const [choice, setChoice] = useState<Side | null>(null);
-  const [stake, setStake] = useState<Stake>(20);
+  const [stake, setStake] = useState<Stake>(2);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rise = useRef(new Animated.Value(0)).current;

@@ -22,7 +22,7 @@ import { dismissPushOffer, enablePush, shouldOfferPush } from '../push';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
 onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
-const STAKES = [10, 50, 100, 250];
+const STAKES = [1, 2, 5, 10];
 /** Re-sync pools from the server (after switching accounts). */
 export const refreshPools = () => { if ('refresh' in store) (store as { refresh: () => Promise<void> }).refresh(); };
 /** How many pools you're in or made (for the add-to-home-screen nudge). */
@@ -87,7 +87,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
     const c = crewList().find((x) => x.id === view.id);
     if (!c) { setTimeout(() => setView({ kind: 'list' })); return null; }
     return <CrewView renderBar={renderBar} crew={c} pools={store.list().filter((p) => (p.groupId ? p.groupId === c.id : p.groupName === c.name))}
-      onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'detail', id })} onNew={() => setView({ kind: 'create', draft: { key: '', category: '', emoji: '', question: '', mode: 'yesno', outcomes: [], memberIds: [], stake: 50, crew: c.name } })} />;
+      onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'detail', id })} onNew={() => setView({ kind: 'create', draft: { key: '', category: '', emoji: '', question: '', mode: 'yesno', outcomes: [], memberIds: [], stake: 2, crew: c.name } })} />;
   }
 
   const settled = (p: Pool) => ['resolved', 'voided', 'rejected'].includes(p.status);
@@ -346,7 +346,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   const [picked, setPicked] = useState<string[]>(draft?.memberIds ?? []);
   const [subject, setSubject] = useState<string | undefined>(draft?.subjectId);
   const [group, setGroup] = useState(draft?.crew ?? crews[0]?.name ?? 'house');
-  const [stake, setStake] = useState(draft?.stake ?? 50);
+  const [stake, setStake] = useState(draft?.stake ?? 2);
   const [deadline, setDeadline] = useState(3); // 24 hours
   const [weekly, setWeekly] = useState(false);
   const [error, setError] = useState<string | null>(null);

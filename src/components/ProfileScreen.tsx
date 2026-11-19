@@ -113,10 +113,10 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
           ))}
         </View>
 
-        <Pressable onPress={async () => { if ((await shareText(`come play LetsJam with me. use my code ${inviteCode()} and we both get 500 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
+        <Pressable onPress={async () => { if ((await shareText(`come play LetsJam with me. use my code ${inviteCode()} and we both get 10 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
           <T size={30}>💌</T>
           <View style={{ flex: 1 }}>
-            <T weight="bold" color={colors.white}>invite friends, get 500 coins each</T>
+            <T weight="bold" color={colors.white}>invite friends, get 10 coins each</T>
             <T size={13} color={colors.white}>your code {inviteCode()}</T>
           </View>
           <Ionicons name="share-outline" size={22} color={colors.white} />

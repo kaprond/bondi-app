@@ -25,5 +25,5 @@ export interface BetResult {
   balance: number;
 }
 
-export const STAKES = [10, 20, 50, 100] as const;
+export const STAKES = [1, 2, 5, 10] as const;
 export type Stake = (typeof STAKES)[number];

@@ -64,7 +64,7 @@ export const TEMPLATES: Template[] = [
 ];
 
 const DAYS = ['friday', 'saturday', 'sunday'];
-const STAKES = [10, 50, 100];
+const STAKES = [1, 2, 5];
 
 function shuffle<T>(xs: T[], rnd: () => number): T[] {
   const a = [...xs];

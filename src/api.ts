@@ -9,7 +9,7 @@ export interface BondiApi {
   /** Today's reward: whether it's claimed, the day streak, and what claiming pays (or paid). */
   getDaily(): Promise<Daily>;
   claimDaily(): Promise<{ balance: number; amount: number; dayStreak: number }>;
-  /** New players only. Both sides get 500 coins and become friends. Returns the new balance. */
+  /** New players only. Both sides get 10 coins and become friends. Returns the new balance. */
   redeemInvite(code: string): Promise<number>;
   placeBet(clipId: string, choice: Side, stake: Stake): Promise<BetResult>;
   /** Pays a finished daily mission once per day. The server re-checks the mission against your bets. */
@@ -23,8 +23,8 @@ export interface BondiApi {
   getMyClips(): Promise<{ clips: CreatorClip[]; balance: number }>;
 }
 
-/** Daily reward grows with the day streak: 500 on day 1, +100 a day, capped at 1,000 from day 6. */
-export const dailyAmount = (dayStreak: number) => 500 + 100 * (Math.min(Math.max(dayStreak, 1), 6) - 1);
+/** Daily reward grows with the day streak: 5 on day 1, +1 a day, capped at 10 from day 6. 1 coin ≈ €1 of play money. */
+export const dailyAmount = (dayStreak: number) => 5 + (Math.min(Math.max(dayStreak, 1), 6) - 1);
 
 /**
  * In-memory stand-in for the Supabase backend (supabase/migrations/0001_init.sql).
@@ -64,7 +64,7 @@ const feed: FeedClip[] = [
 
 /** Demo wallet shared by the feed and friend pools. */
 export const wallet = {
-  balance: 1000, // signup grant, same as 0003_profiles_trigger.sql
+  balance: 50, // signup grant, same as 0003_profiles_trigger.sql
   debit(n: number) { if (wallet.balance < n) return false; wallet.balance -= n; save({ balance: wallet.balance }); return true; },
   credit(n: number) { wallet.balance += n; save({ balance: wallet.balance }); },
 };
@@ -114,7 +114,7 @@ export function createMockApi(): BondiApi {
       if (redeemed) throw new Error('you already used an invite code');
       redeemed = true;
       save({ redeemed });
-      wallet.credit(500);
+      wallet.credit(10);
       return wallet.balance;
     },
     async claimMission(id) {

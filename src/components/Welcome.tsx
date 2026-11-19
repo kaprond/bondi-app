@@ -25,7 +25,7 @@ export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAcce
           <T size={22}>🎉</T>
           <View style={{ flex: 1 }}>
             <T weight="bold" color={colors.deep}>@{invitedBy} invited you</T>
-            <T size={13} weight="semi" color={colors.deep}>join now and you both get +500 coins</T>
+            <T size={13} weight="semi" color={colors.deep}>join now and you both get +10 coins</T>
           </View>
         </View>
       )}

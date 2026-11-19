@@ -6,10 +6,10 @@ export interface Today { day: string; calls: number; wins: number; run: number; 
 export interface Mission { id: string; emoji: string; label: string; goal: number; reward: number; value: (t: Today) => number }
 
 export const MISSIONS: Mission[] = [
-  { id: 'calls3', emoji: '🎯', label: 'make 3 calls', goal: 3, reward: 150, value: (t) => t.calls },
-  { id: 'run2', emoji: '🔥', label: 'call 2 in a row', goal: 2, reward: 200, value: (t) => t.bestRun },
-  { id: 'underdog', emoji: '🐺', label: 'win on the underdog (the higher odds)', goal: 1, reward: 250, value: (t) => t.underdogWins },
-  { id: 'share', emoji: '📣', label: 'brag about a win or invite a friend', goal: 1, reward: 100, value: (t) => t.shared },
+  { id: 'calls3', emoji: '🎯', label: 'make 3 calls', goal: 3, reward: 3, value: (t) => t.calls },
+  { id: 'run2', emoji: '🔥', label: 'call 2 in a row', goal: 2, reward: 4, value: (t) => t.bestRun },
+  { id: 'underdog', emoji: '🐺', label: 'win on the underdog (the higher odds)', goal: 1, reward: 5, value: (t) => t.underdogWins },
+  { id: 'share', emoji: '📣', label: 'brag about a win or invite a friend', goal: 1, reward: 2, value: (t) => t.shared },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');

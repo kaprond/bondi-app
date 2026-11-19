@@ -44,17 +44,17 @@ const nid = () => `p${++seq}`;
 export function createPoolsStore(debit: (n: number) => boolean, credit: (n: number) => void, onChange: (pools: Pool[]) => void = () => {}) {
   let pools: Pool[] = [
     {
-      id: nid(), groupName: 'party crew', question: 'do we make the 07:10 train to barcelona?', stake: 50, createdBy: 'alex',
+      id: nid(), groupName: 'party crew', question: 'do we make the 07:10 train to barcelona?', stake: 2, createdBy: 'alex',
       status: 'open', options: [{ id: 'o1', label: 'yes, all of us' }, { id: 'o2', label: 'someone misses it' }],
       entries: [{ userId: 'alex', optionId: 'o2' }, { userId: 'sam', optionId: 'o1' }, { userId: 'taylor', optionId: 'o2' }], votes: [],
     },
     {
-      id: nid(), groupName: 'house', question: 'who wins sunday’s padel final?', stake: 100, createdBy: 'sam',
+      id: nid(), groupName: 'house', question: 'who wins sunday’s padel final?', stake: 5, createdBy: 'sam',
       status: 'open', options: [{ id: 'o3', label: 'team jordan', memberId: 'jordan' }, { id: 'o4', label: 'team taylor', memberId: 'taylor' }],
       entries: [{ userId: 'sam', optionId: 'o3' }, { userId: 'alex', optionId: 'o4' }], votes: [],
     },
     {
-      id: nid(), groupName: 'college', question: 'ajax vs psv: who scores first?', stake: 20, createdBy: 'taylor',
+      id: nid(), groupName: 'college', question: 'ajax vs psv: who scores first?', stake: 1, createdBy: 'taylor',
       status: 'resolved', options: [{ id: 'o5', label: 'ajax' }, { id: 'o6', label: 'psv' }],
       entries: [{ userId: 'taylor', optionId: 'o5' }, { userId: 'sam', optionId: 'o6' }, { userId: 'alex', optionId: 'o5' }, { userId: 'jordan', optionId: 'o5' }],
       votes: [], proposedOptionId: 'o5', resolvedOptionId: 'o5',
