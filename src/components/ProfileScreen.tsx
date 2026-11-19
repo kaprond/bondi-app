@@ -11,6 +11,7 @@ import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLi
 import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
+import { BlobHeader } from './Blob';
 import { blockedList, deleteAccount, refreshBlocks, unblockUser, useBlocks } from '../safety';
 
 interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void; onDeleted: () => void }
@@ -40,8 +41,8 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 32 }}>
-      <View style={{ backgroundColor: colors.sky }}>{renderBar('media')}</View>
-      <View style={styles.band}>
+      <BlobHeader>{renderBar('media')}
+<View style={styles.band}>
         <View style={styles.me}>
           <Avatar id="me" size={88} ring={colors.white} />
           <View style={{ flex: 1, gap: 2 }}>
@@ -58,7 +59,7 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
           <T weight="bold" color={colors.white}>{crewList().length} crews</T><T color={colors.white}>·</T>
           <T weight="bold" color={colors.yellow}>{got}/{badges.length} badges</T>
         </Pressable>
-      </View>
+      </View></BlobHeader>
 
       <View style={styles.body}>
         <View style={styles.balance}>
@@ -233,7 +234,7 @@ function EditProfile({ renderBar, onDone }: { renderBar: RenderBar; onDone: () =
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.cloud },
-  band: { backgroundColor: colors.sky, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 22, gap: 12, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  band: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 22, gap: 12 },
   body: { padding: 18, gap: 16 },
   me: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   edit: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginTop: 6 },

@@ -9,14 +9,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.joyride.bondi",
-      "buildNumber": "100",
+      "buildNumber": "101",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0095B6",
+        "backgroundColor": "#28275F",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -44,8 +44,8 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 220,
-          "backgroundColor": "#0095B6",
+          "imageWidth": 240,
+          "backgroundColor": "#28275F",
           "resizeMode": "contain"
         }
       ]

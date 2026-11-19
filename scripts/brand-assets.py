@@ -1,5 +1,5 @@
-"""Renders the LetsJam app icons, splash, favicon and link-preview card.
-Same look as before: Baloo 2 ExtraBold in white on the teal gradient, with the yellow dot.
+"""Renders the LetsJam app icons, splash, favicon and link-preview card from the glossy
+brand art (assets/brand/letsjam-art.png). Fallback glyph helpers are kept for the og card text.
 Needs Pillow and node_modules (for the font). Run:  python3 scripts/brand-assets.py"""
 import os
 from PIL import Image, ImageDraw, ImageFont
@@ -11,6 +11,20 @@ QUICK = os.path.join(FONTS, 'quicksand', '700Bold', 'Quicksand_700Bold.ttf')
 TOP, BOTTOM = (51, 170, 197), (4, 148, 183)
 BRAND, DEEP, YELLOW, WHITE = (0, 149, 182), (0, 82, 100), (255, 240, 0), (255, 255, 255)
 NAME, MARK = 'letsjam', 'j'
+ART = os.path.join(ROOT, 'assets', 'brand', 'letsjam-art.png')
+INDIGO = (40, 39, 95)
+
+
+def art(size):
+    return Image.open(ART).convert('RGB').resize((size, size), Image.LANCZOS)
+
+
+def rounded(im, radius):
+    mask = Image.new('L', im.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, im.size[0] - 1, im.size[1] - 1], radius=radius, fill=255)
+    out = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    out.paste(im.convert('RGBA'), (0, 0), mask)
+    return out
 
 
 def gradient(w, h):
@@ -71,7 +85,7 @@ def splash():
 
 def og():
     W, H = 1200, 630
-    im = gradient(W, H).convert('RGBA')
+    im = Image.new('RGBA', (W, H), INDIGO + (255,))
     d = ImageDraw.Draw(im)
     wm = wordmark(84)
     im.alpha_composite(wm, (72, 70))
@@ -82,15 +96,15 @@ def og():
     x += d.textlength('your ', font=big)
     d.text((x, 280), 'crew', font=big, fill=YELLOW)
     sub = ImageFont.truetype(QUICK, 40)
-    d.text((72, 445), 'friend pools on anything. winners split the pot.', font=sub, fill=WHITE)
+    d.text((72, 445), 'friend pools on anything.', font=sub, fill=WHITE)
     pill = ImageFont.truetype(QUICK, 34)
     label = 'free coins · no cash · 18+'
     pw = d.textlength(label, font=pill) + 64
     d.rounded_rectangle([72, 520, 72 + pw, 586], radius=33, fill=WHITE)
     d.text((72 + 32, 530), label, font=pill, fill=BRAND)
     # right side: a big mark
-    m = mark(380)
-    im.alpha_composite(m, (W - 380 - 50, 125))
+    a = rounded(art(400), 64)
+    im.alpha_composite(a, (W - 400 - 50, 115))
     return im.convert('RGB')
 
 
@@ -98,13 +112,15 @@ def main():
     out = lambda p: os.path.join(ROOT, p)
     for path, size in [('assets/icon.png', 1024), ('public/icon-512.png', 512), ('public/icon-192.png', 192),
                        ('public/apple-touch-icon.png', 180), ('assets/favicon.png', 48)]:
-        icon(size).save(out(path))
-    # Android adaptive icon: glyph inside the 66% safe zone, flat brand background
-    mark(1024, scale=0.40).save(out('assets/android-icon-foreground.png'))
-    Image.new('RGB', (1024, 1024), BRAND).save(out('assets/android-icon-background.png'))
-    mono = mark(1024, color=(0, 0, 0), dot=(0, 0, 0), scale=0.40)
-    mono.save(out('assets/android-icon-monochrome.png'))
-    splash().save(out('assets/splash-icon.png'))
+        art(size).save(out(path))
+    # Android adaptive icon: the art inside the 66% safe zone so masks never cut the wordmark
+    fg = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
+    fg.alpha_composite(rounded(art(660), 120), (182, 182))
+    fg.save(out('assets/android-icon-foreground.png'))
+    Image.new('RGB', (1024, 1024), INDIGO).save(out('assets/android-icon-background.png'))
+    mark(1024, color=(0, 0, 0), dot=(0, 0, 0), scale=0.40).save(out('assets/android-icon-monochrome.png'))
+    # Splash: the art, rounded, on indigo (app.json backgroundColor #28275F)
+    rounded(art(1024), 180).save(out('assets/splash-icon.png'))
     og().save(out('public/og.png'))
     print('brand assets written')
 
