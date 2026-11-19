@@ -15,3 +15,15 @@ export function blockedTopic(text: string): string | null {
   for (const b of BLOCKED) if (b.words.test(text)) return b.topic;
   return null;
 }
+
+/** Same rule as forfeit_problem() in 0018_irl_stakes.sql: a real-life stake is text only, never money. */
+export function forfeitProblem(text: string | undefined): string | null {
+  const t = (text ?? '').trim();
+  if (!t) return null;
+  if (t.length < 3) return 'make the real-life stake a bit longer.';
+  if (t.length > 60) return 'keep the real-life stake under 60 characters.';
+  if (/[€$£]|\b(eur|euro|euros|cash|money|geld|tikkie|bunq|paypal|revolut|venmo|iban|pay|pays|paid|payment|betaal\w*|transfer|overmaken|bet|bets|wager)\b/i.test(t))
+    return 'no money in real-life stakes. keep it to things like buying a round or doing the dishes.';
+  const topic = blockedTopic(t);
+  return topic ? `real-life stakes about ${topic} aren’t allowed.` : null;
+}

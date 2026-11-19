@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
   const title = p ? `${p.question}` : 'join my pool on LetsJam';
   const who = p?.by ? `@${p.by}` : from ? `@${from}` : 'a friend';
   const desc = p
-    ? `${who} started a pool in ${p.crew}. ${p.pot > 0 ? `${p.pot} coins in the pot, ` : ''}${p.stake} each. tap to make your call. free coins, no cash.`
+    ? `${who} started a pool in ${p.crew}. ${p.pot > 0 ? `${p.pot} coins in the pot, ` : ''}${p.stake} each.${p.forfeit ? ` wrong side ${p.forfeit}.` : ''} tap to make your call. free coins, no cash.`
     : `${who} wants you in a friend pool. free coins, no cash.`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

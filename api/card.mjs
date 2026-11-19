@@ -24,6 +24,7 @@ export async function loadResult(id) {
 }
 
 const h = (type, style, ...children) => ({ type, props: { style: { display: 'flex', ...style }, children: children.length === 1 ? children[0] : children } });
+const noEmoji = (s) => String(s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').trim();
 const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 export function card(r) {
@@ -37,7 +38,8 @@ export function card(r) {
     h('div', { flexDirection: 'column' },
       h('div', { fontSize: 40, color: 'rgba(255,255,255,0.8)', marginBottom: 18 }, r ? clip(r.question, 70) : 'friend pools with free coins'),
       h('div', { fontSize: 92, fontWeight: 800, lineHeight: 1 }, r ? clip(r.winner ?? '', 28) : 'call it with your crew'),
-      h('div', { fontSize: 44, fontWeight: 800, color: '#F9C500', marginTop: 20 }, r ? `${clip(who, 40)} called it` : '')),
+      h('div', { fontSize: 44, fontWeight: 800, color: '#F9C500', marginTop: 20 }, r ? `${clip(who, 40)} called it` : ''),
+      r?.forfeit ? h('div', { fontSize: 32, color: '#fff', marginTop: 10 }, `wrong side ${clip(noEmoji(r.forfeit), 50)}`) : h('div', {}, '')),
     h('div', { alignItems: 'flex-end', justifyContent: 'space-between' },
       h('div', { fontSize: 32, color: 'rgba(255,255,255,0.85)' }, r ? `${r.players} played · ${r.pot} coins in the pot${each ? ` · ${each} each` : ''}` : ''),
       h('div', { fontSize: 56, fontWeight: 800, color: '#fff' }, 'letsjam')));
