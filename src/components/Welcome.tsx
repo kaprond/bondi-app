@@ -1,10 +1,12 @@
-import { StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Image, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from '../theme';
-import { H, PillButton, T, Wordmark } from './ui';
+import { H, PillButton, T } from './ui';
+import { ART_HERO } from './Blob';
 
 export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAccept: () => void; topInset: number; bottomInset: number; invitedBy?: string }) {
+  const { width, height } = useWindowDimensions();
+  const hero = Math.min(width - 44, 360, height * 0.4);
   // launch: friend pools first, clips come later
   const steps: [keyof typeof Ionicons.glyphMap, string][] = [
     ['people', 'start a pool with your crew'],
@@ -12,10 +14,10 @@ export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAcce
     ['trophy', 'call it with free coins. winners split the pot'],
   ];
   return (
-    <LinearGradient colors={[colors.sky, colors.brand]} style={[styles.wrap, { paddingTop: topInset + 24, paddingBottom: bottomInset + 24 }]}>
-      <Wordmark size={44} />
-      <View style={{ gap: 10 }}>
-        <H size={52} color={colors.white}>guess what{'\n'}happens <H size={52} color={colors.yellow}>next</H></H>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.royal }} contentContainerStyle={[styles.wrap, { paddingTop: topInset + 16, paddingBottom: bottomInset + 24 }]}>
+      <Image source={ART_HERO} style={[styles.hero, { width: hero, height: hero }]} accessibilityLabel="letsjam" />
+      <View style={{ gap: 8 }}>
+        <H size={40} color={colors.white}>call it with{'\n'}your <H size={40} color={colors.yellow}>crew</H></H>
         <T weight="semi" size={17} color={colors.white}>friend pools on anything. call it right and stack your coins.</T>
       </View>
       {invitedBy && (
@@ -39,12 +41,13 @@ export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAcce
         <PillButton label="i’m 18 or older · let’s goooo" variant="white" onPress={onAccept} />
         <T size={12} color={colors.white} style={{ textAlign: 'center' }}>coins are free and have no cash value. you can’t buy them or cash them out.</T>
       </View>
-    </LinearGradient>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, paddingHorizontal: 22, justifyContent: 'space-between' },
+  wrap: { flexGrow: 1, paddingHorizontal: 22, gap: 18, justifyContent: 'space-between' },
+  hero: { alignSelf: 'center', borderRadius: 36 },
   invite: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.yellow, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 12 },
   steps: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 14 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12 },

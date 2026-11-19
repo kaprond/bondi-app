@@ -13,6 +13,7 @@ import {
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
+import { BlobHeader } from './Blob';
 import { PersonSheet } from './PersonSheet';
 
 export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar; onPoolWith: (friendId: string) => void }) {
@@ -38,8 +39,8 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
-        <View style={{ backgroundColor: colors.sky }}>{renderBar('media')}</View>
-        <View style={styles.band}>
+        <BlobHeader>{renderBar('media')}
+<View style={styles.band}>
           <Eyebrow label={`${friends.length} friends`} tone="white" />
           <H size={40} color={colors.white}>your <H size={40} color={colors.yellow}>people</H></H>
           <T weight="semi" color={colors.white} size={16}>LetsJam is better with the besties. invite them and you both get 500 coins.</T>
@@ -51,7 +52,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
             <PillButton label={copied ?? 'invite friends'} variant="white" onPress={invite} style={{ flex: 1 }}
               icon={<Ionicons name={copied ? 'checkmark' : 'paper-plane'} size={18} color={colors.brand} />} />
           </View>
-        </View>
+        </View></BlobHeader>
 
         <View style={styles.body}>
           <LeagueCard onPress={openLeague} />
@@ -239,7 +240,7 @@ function CreateCrew({ renderBar, onDone }: { renderBar: RenderBar; onDone: () =>
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.cloud },
-  band: { backgroundColor: colors.sky, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 22, gap: 10, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  band: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 22, gap: 10 },
   inviteRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 4 },
   code: { backgroundColor: colors.white, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.line },
   body: { padding: 18, gap: 18 },

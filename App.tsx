@@ -31,6 +31,7 @@ import { SetupProfile } from './src/components/SetupProfile';
 import { LIVE } from './src/backend';
 import { befriendInviter, friendList, incomingList, inviteCode, inviteLink, syncMyStats, useSocial } from './src/social';
 import { H, T } from './src/components/ui';
+import { BlobBanner } from './src/components/Blob';
 import { BarTone, TopBar } from './src/components/TopBar';
 import { Welcome } from './src/components/Welcome';
 import { recordShare, setSound, useStats } from './src/session';
@@ -341,9 +342,9 @@ function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPo
 
 function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools: () => void; onInvite: () => void }) {
   return (
-    <View style={[styles.end, { flex: 1, paddingTop: topInset + 72 }]}>
+    <View style={[styles.end, { flex: 1, paddingTop: topInset + 72, backgroundColor: colors.royal }]}>
+      <BlobBanner />
       <View style={styles.soonPill}><T size={13} weight="bold" color={colors.deep}>coming soon</T></View>
-      <T size={44}>🎬</T>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>guess what happens next</H>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>short clips that pause right before the moment. call it with free coins. dropping soon.</T>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>for now: start a pool with your friends.</T>

@@ -11,6 +11,7 @@ import { crewList, me, useSocial } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
+import { BlobHeader } from './Blob';
 import { ReportSheet } from './ReportSheet';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
@@ -51,8 +52,8 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
   const shown = pools.filter((p) => (tab === 'active' ? !settled(p) : settled(p)));
   return (
     <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 32 }}>
-      <View style={styles.bandWrap}>{renderBar('media')}</View>
-      <View style={styles.band}>
+      <BlobHeader>{renderBar('media')}
+<View style={styles.band}>
         <Eyebrow label="season 2: friends" tone="white" />
         <H size={40} color={colors.white}>friend <H size={40} color={colors.yellow}>pools</H></H>
         <T weight="semi" color={colors.white} size={16}>bring in the besties. put coins on what happens next, together.</T>
@@ -67,7 +68,7 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
             </View>
           ))}
         </ScrollView>
-      </View>
+      </View></BlobHeader>
 
       <View style={styles.body}>
         <ChallengeCard onUse={(draft) => setView({ kind: 'create', draft })} />
@@ -402,9 +403,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.cloud },
-  bandWrap: { backgroundColor: colors.sky },
   inBar: { marginHorizontal: -18, marginTop: -18 },
-  band: { backgroundColor: colors.sky, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 22, gap: 8, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  band: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 22, gap: 8 },
   groups: { gap: 14, paddingTop: 10 },
   newGroup: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
   groupItem: { alignItems: 'center', gap: 4 },
