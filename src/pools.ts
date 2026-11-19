@@ -1,6 +1,6 @@
 import { blockedTopic } from './moderation';
 import { crewByName, ME, nameOf, refreshSocial, toLocal, toServer } from './social';
-import { LIVE, rpc } from './backend';
+import { ensureSession, LIVE, rpc, sb } from './backend';
 import { toast } from './bus';
 
 export { ME, nameOf };
@@ -168,7 +168,16 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
   const controls = (p: Pool, uid: string) => uid === p.subjectId || p.options.some((o) => o.memberId === uid);
 
   refresh();
-  setInterval(refresh, 15000);
+  // Live: re-sync as soon as anything in your pools changes (RLS limits it to pools you can see);
+  // a slow poll stays as a safety net for dropped connections.
+  let soon: ReturnType<typeof setTimeout> | null = null;
+  const nudge = () => { if (soon) return; soon = setTimeout(() => { soon = null; refresh(); }, 400); };
+  if (sb) {
+    const ch = sb.channel('pools-live');
+    for (const table of ['pools', 'pool_entries', 'pool_votes', 'group_members']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, nudge);
+    ensureSession().then(() => ch.subscribe()).catch(() => {});
+  }
+  setInterval(refresh, 60000);
 
   return {
     live: true as const,

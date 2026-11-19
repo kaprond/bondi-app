@@ -2,17 +2,18 @@
   "expo": {
     "name": "LetsJam",
     "slug": "letsjam",
-    "version": "3.1.5",
+    "version": "3.1.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.joyride.bondi",
-      "buildNumber": "102",
+      "buildNumber": "103",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -47,6 +48,13 @@
           "imageWidth": 240,
           "backgroundColor": "#28275F",
           "resizeMode": "contain"
+        }
+      ],
+      "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "color": "#28275F"
         }
       ]
     ],

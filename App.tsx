@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, LayoutChangeEvent, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, LayoutChangeEvent, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,14 +22,15 @@ import { BreakReminder } from './src/components/BreakReminder';
 import { InstallSheet } from './src/components/InstallSheet';
 import { installKind } from './src/install';
 import { ClipCard } from './src/components/ClipCard';
-import { PoolsScreen } from './src/components/PoolsScreen';
+import { poolCount, PoolsScreen, refreshPools } from './src/components/PoolsScreen';
+import { wirePush } from './src/push';
 import { CreatorScreen } from './src/components/CreatorScreen';
 import { refreshCreator } from './src/creatorState';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { FriendsScreen } from './src/components/FriendsScreen';
 import { SetupProfile } from './src/components/SetupProfile';
-import { LIVE } from './src/backend';
-import { befriendInviter, friendList, incomingList, inviteCode, inviteLink, syncMyStats, useSocial } from './src/social';
+import { LIVE, rpc } from './src/backend';
+import { befriendInviter, refreshSocial, friendList, incomingList, inviteCode, inviteLink, syncMyStats, useSocial } from './src/social';
 import { H, T } from './src/components/ui';
 import { BlobBanner } from './src/components/Blob';
 import { BarTone, TopBar } from './src/components/TopBar';
@@ -79,6 +80,8 @@ function Shell() {
   const { streak } = stats;
   const [setup, setSetup] = useState(false);
   const [poolIntent, setPoolIntent] = useState<{ friendId: string; n: number } | undefined>();
+  const [openPool, setOpenPool] = useState<{ id: string; n: number } | undefined>();
+  const { width: winW } = useWindowDimensions();
   const social = useSocial();
   const league = useLeague();
   const [leagueOpen, setLeagueOpen] = useState(false);
@@ -95,7 +98,16 @@ function Shell() {
     if (e.kind === 'toast') { setToast({ id: Date.now(), text: e.text }); if (e.coins) sfx.coins(); }
     if (e.kind === 'league') setLeagueOpen(true);
     if (e.kind === 'missions') setMissionsOpen(true);
+    if (e.kind === 'go') { setTab(e.to); if (e.poolId) setOpenPool({ id: e.poolId, n: Date.now() }); }
+    if (e.kind === 'reload') {
+      // switched accounts: start over with the new account's data
+      if (Platform.OS === 'web') { try { (globalThis as { location?: Location }).location?.reload(); return; } catch { /* fall through */ } }
+      refreshSocial(); refreshPools(); api.getBalance().then(setBalance).catch(() => {}); setTab('pools');
+    }
   }), []);
+
+  // push notifications (app only): show them in-app and open the right screen when tapped
+  useEffect(() => (ageOk ? wirePush() : undefined), [ageOk]);
 
   // a finished mission pays out by itself (once a day; the server re-checks it)
   const today = stats.today?.day === dayKey() ? stats.today : null;
@@ -156,6 +168,16 @@ function Shell() {
     })();
   }, []);
 
+  // Opened from a shared pool link: join that pool's crew and open the pool.
+  const joinedPool = useRef(false);
+  useEffect(() => {
+    if (!invite?.pool || joinedPool.current || ageOk !== true || setup || !LIVE) return;
+    joinedPool.current = true;
+    rpc('join_pool_link', { p_pool: invite.pool, p_code: invite.code })
+      .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setOpenPool({ id: invite.pool!, n: Date.now() }); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew now. make your call` }); })
+      .catch((e: Error) => setToast({ id: Date.now(), text: e.message }));
+  }, [invite, ageOk, setup]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Opened from a friend's invite link while already playing: just connect you two.
   useEffect(() => {
     if (!invite || ageOk !== true || setup) return;
@@ -174,12 +196,13 @@ function Shell() {
 
   // After your third call, once: offer to put LetsJam on the home screen (web on a phone only).
   useEffect(() => {
-    if (installAsked.current !== false || stats.bets < 3 || installOpen) return;
+    if (installAsked.current !== false || installOpen) return;
+    if (stats.bets < 3 && poolCount() < 1) return;
     const kind = installKind();
     if (kind === 'none') return;
     installAsked.current = true;
     setInstallOpen(kind);
-  }, [activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeIndex, tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const installDone = (installed: boolean) => {
     setInstallOpen(null);
     AsyncStorage.setItem(INSTALL_KEY, '1').catch(() => {});
@@ -263,10 +286,12 @@ function Shell() {
     missions={CLIPS_LIVE ? { done: missionsDone, total: MISSIONS.length } : undefined} onMissions={() => setMissionsOpen(true)} />;
   const next = (i: number) => { if (i + 1 < feed.length) listRef.current?.scrollToIndex({ index: i + 1 }); else setActiveIndex(feed.length); };
 
+  const wide = Platform.OS !== 'web' && winW > 700;
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, wide && styles.wideRoot]}>
+    <View style={[{ flex: 1 }, wide && styles.wideCol]}>
       <View style={{ flex: 1 }}>
-        {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} onBalance={async () => setBalance(await api.getBalance())} />}
+        {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} openPool={openPool} onBalance={async () => setBalance(await api.getBalance())} />}
         {tab === 'create' && <CreatorScreen renderBar={renderBar} onBalance={setBalance} />}
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} onDeleted={accountDeleted} />}
@@ -324,6 +349,7 @@ function Shell() {
         })}
       </View>
     </View>
+    </View>
   );
 }
 
@@ -355,12 +381,13 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
 }
 
 /** ?i=BND-XXXX&from=handle from a friend's invite link (web). */
-function readInvite(): { code: string; from: string } | null {
+function readInvite(): { code: string; from: string; pool?: string } | null {
   if (Platform.OS !== 'web') return null;
   try {
     const q = new URLSearchParams((globalThis as { location?: Location }).location?.search ?? '');
     const code = (q.get('i') ?? '').toUpperCase(), from = (q.get('from') ?? '').replace(/[^a-z0-9._]/gi, '').toLowerCase();
-    return /^BND-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from } : null;
+    const pool = (q.get('pool') ?? '').toLowerCase();
+    return /^BND-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: /^[0-9a-f-]{36}$/.test(pool) ? pool : undefined } : null;
   } catch { return null; }
 }
 function clearInviteFromUrl() {
@@ -371,6 +398,8 @@ function clearInviteFromUrl() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cloud },
+  wideRoot: { backgroundColor: colors.royal, alignItems: 'center' },
+  wideCol: { width: '100%', maxWidth: 680, backgroundColor: colors.cloud },
   header: { position: 'absolute', top: 0, left: 0, right: 0 },
   tabs: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 2 },

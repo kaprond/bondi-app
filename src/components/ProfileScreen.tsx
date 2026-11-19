@@ -12,6 +12,7 @@ import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
+import { AccountCard } from './AccountCard';
 import { blockedList, deleteAccount, refreshBlocks, unblockUser, useBlocks } from '../safety';
 
 interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void; onDeleted: () => void }
@@ -72,6 +73,8 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
           <PillButton label={!daily ? 'loading…' : daily.claimed ? `come back tomorrow for +${dailyAmount(daily.dayStreak + 1)}` : `claim today’s +${daily.amount} coins`} variant="white" disabled={!daily || daily.claimed} onPress={onClaim} />
         </View>
 
+        <AccountCard />
+
         <View style={styles.grid}>
           {tiles.map(([k, v]) => (
             <View key={k} style={styles.tile}><H size={30} color={colors.deep}>{v}</H><T weight="semi" size={13} color={colors.muted}>{k}</T></View>
@@ -95,7 +98,7 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
 
         <View style={styles.card}>
           <Eyebrow label="recent calls" />
-          {s.history.length === 0 && <T color={colors.muted}>your calls show up here. go call one on the feed.</T>}
+          {s.history.length === 0 && <T color={colors.muted}>your calls show up here once clips drop.</T>}
           {s.history.slice(0, 6).map((c) => (
             <View key={c.at} style={styles.call}>
               <View style={[styles.callDot, { backgroundColor: c.won ? colors.win : colors.orange }]}>
@@ -123,7 +126,7 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
           <Eyebrow label="play it cool" />
           <T weight="semi" color={colors.deep}>LetsJam is free to play. coins can’t be bought or cashed out, and there are no prizes with money value.</T>
           <View style={styles.row}><Ionicons name="time-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>take a break reminder after 30 minutes</T></View>
-          <View style={styles.row}><Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>every outcome is locked and hashed before a clip goes live</T></View>
+          <View style={styles.row}><Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} /><T weight="semi" color={colors.deep}>a pool about a friend only opens once they say ok</T></View>
         </View>
         {blocked.length > 0 && (
           <View style={styles.card}>

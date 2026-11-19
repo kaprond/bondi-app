@@ -115,7 +115,16 @@ export function refreshSocial(): Promise<void> {
   })();
   return inFlight;
 }
-if (LIVE) { refreshSocial(); setInterval(refreshSocial, 15000); }
+if (LIVE) {
+  refreshSocial();
+  // Live: friend requests and crew changes arrive instantly; slow poll as a safety net.
+  let soon: ReturnType<typeof setTimeout> | null = null;
+  const nudge = () => { if (soon) return; soon = setTimeout(() => { soon = null; refreshSocial(); }, 400); };
+  const ch = sb!.channel('social-live');
+  for (const table of ['friendships', 'group_members']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, nudge);
+  ensureSession().then(() => ch.subscribe()).catch(() => {});
+  setInterval(refreshSocial, 60000);
+}
 
 /** Run a server change, then re-sync. Errors show as a toast and the cache rolls back on the next sync. */
 function remote(fn: string, args: Record<string, unknown>, after?: () => void) {

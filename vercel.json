@@ -33,5 +33,11 @@
       ]
     }
   ],
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/p/:id",
+      "destination": "/api/pool?id=:id"
+    }
+  ]
 }
