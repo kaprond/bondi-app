@@ -7,21 +7,27 @@ import { Avatar } from '../avatar';
 import { CATEGORIES, Challenge, randomChallenge } from '../challenges';
 import { blockedTopic } from '../moderation';
 import { createLivePoolsStore, createPoolsStore, LIVE, ME, nameOf, Pool, PoolOption } from '../pools';
-import { crewList, me, useSocial } from '../social';
+import { APP_URL, crewList, inviteCode, me, useSocial } from '../social';
+import { shareText } from '../share';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { ReportSheet } from './ReportSheet';
+import { dismissPushOffer, enablePush, shouldOfferPush } from '../push';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
 onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
 const STAKES = [10, 50, 100, 250];
+/** Re-sync pools from the server (after switching accounts). */
+export const refreshPools = () => { if ('refresh' in store) (store as { refresh: () => Promise<void> }).refresh(); };
+/** How many pools you're in or made (for the add-to-home-screen nudge). */
+export const poolCount = () => store.list().length;
 type Draft = Challenge & { crew: string };
 type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string };
 
 /** `intent` asks the screen to open "create" with a challenge about one friend (from their profile). */
-export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number } }) {
+export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number }; openPool?: { id: string; n: number } }) {
   useSocial();
   const [, setTick] = useState(0);
   const [view, setView] = useState<View_>({ kind: 'list' });
@@ -40,6 +46,9 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
       setView({ kind: 'create', draft: { ...c, crew: crew.name } });
     } catch { setView({ kind: 'create' }); }
   }, [intent?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Opened from a push notification or a shared pool link
+  useEffect(() => { if (openPool?.id) setView({ kind: 'detail', id: openPool.id }); }, [openPool?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (view.kind === 'create') return <CreatePool renderBar={renderBar} draft={view.draft} onDone={(id) => { refresh(); setView(id ? { kind: 'detail', id } : { kind: 'list' }); }} />;
   if (view.kind === 'detail') {
@@ -71,6 +80,7 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
       </View></BlobHeader>
 
       <View style={styles.body}>
+        <PushOffer />
         <ChallengeCard onUse={(draft) => setView({ kind: 'create', draft })} />
 
         <View style={styles.segment}>
@@ -102,6 +112,26 @@ export function PoolsScreen({ renderBar, onBalance, intent }: { renderBar: Rende
         <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>pools use free coins only. coins have no cash value.</T>
       </View>
     </ScrollView>
+  );
+}
+
+/** One-time card in the app: turn on notifications for pool results and friend requests. */
+function PushOffer() {
+  const [show, setShow] = useState(false);
+  useEffect(() => { shouldOfferPush().then(setShow); }, []);
+  if (!show) return null;
+  return (
+    <View style={styles.pushCard}>
+      <T size={26}>🔔</T>
+      <View style={{ flex: 1, gap: 2 }}>
+        <T weight="bold" color={colors.deep}>know when your crew calls it</T>
+        <T size={13} color={colors.muted}>results, votes, who joined your pool, friend requests.</T>
+      </View>
+      <View style={{ gap: 6 }}>
+        <Pressable onPress={async () => { await enablePush(true); setShow(false); }} style={styles.pushOn} accessibilityRole="button"><T size={13} weight="bold" color={colors.white}>turn on</T></Pressable>
+        <Pressable onPress={() => { dismissPushOffer(); setShow(false); }} accessibilityRole="button"><T size={12} weight="bold" color={colors.muted} style={{ textAlign: 'center' }}>not now</T></Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -177,6 +207,8 @@ function ChallengeCard({ onUse }: { onUse: (d: Draft) => void }) {
     </View>
   );
 }
+
+const settledStatus = (p: Pool) => ['resolved', 'voided', 'rejected'].includes(p.status);
 
 function statusLabel(p: Pool) {
   return { pending_consent: `waiting for ${nameOf(p.subjectId ?? '')} to say ok`, open: 'open', proposed: 'result proposed, voting', resolved: 'settled', voided: 'cancelled, coins returned', rejected: 'subject said no' }[p.status];
@@ -390,6 +422,13 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
       {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}
       {p.status === 'voided' && <View style={styles.notice}><T weight="semi" color={colors.deep}>no majority confirmed, so the pool was cancelled and everyone got their coins back.</T></View>}
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
+      {LIVE && !settledStatus(p) && (
+        <PillButton label="invite friends to this pool" variant="ghost" icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />}
+          onPress={async () => {
+            const link = `${APP_URL}/p/${p.id}?i=${inviteCode()}&from=${encodeURIComponent(me().handle)}`;
+            await shareText(`${p.question} 👀 i started a pool on LetsJam, make your call:`, link);
+          }} />
+      )}
       {p.createdBy !== ME && (
         <Pressable onPress={() => setReporting(true)} style={{ alignSelf: 'center', paddingVertical: 6 }} accessibilityRole="button">
           <T size={13} weight="bold" color={colors.muted}>report this pool</T>
@@ -440,5 +479,7 @@ const styles = StyleSheet.create({
   miniChip: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' },
   miniChipOn: { backgroundColor: colors.white, borderColor: colors.white },
   outcome: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tint, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  pushCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, padding: 14, borderWidth: 2, borderColor: colors.sun, ...shadow.soft },
+  pushOn: { backgroundColor: colors.brand, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   surprise: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.royal, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, ...shadow.button },
 });
