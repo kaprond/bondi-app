@@ -42,7 +42,7 @@ export function DailyReward({ daily, onClaim, onLater }: { daily: Daily; onClaim
             })}
           </View>
           <T size={13} weight="semi" color={colors.muted} style={{ textAlign: 'center' }}>
-            {n >= 6 ? 'max streak. keep it alive for 1,000 a day.' : `come back tomorrow for +${dailyAmount(n + 1)}. miss a day and it resets.`}
+            {n >= 6 ? 'max streak. keep it alive for 10 a day.' : `come back tomorrow for +${dailyAmount(n + 1)}. miss a day and it resets.`}
           </T>
           <PillButton label={`claim +${daily.amount} coins`} busy={busy} onPress={async () => { setBusy(true); try { await onClaim(); } finally { setBusy(false); } }} />
           <Pressable onPress={onLater} accessibilityRole="button" style={{ alignSelf: 'center', padding: 4 }}>

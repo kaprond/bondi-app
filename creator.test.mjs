@@ -3,13 +3,13 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const C = require('./.testbuild/creator.js');
 
-// commission: 5% of the stake, at least 1 coin
-assert.deepEqual([10, 20, 50, 100].map(C.commissionFor), [1, 1, 2, 5]);
+// commission: 10% of the stake, rounded down, no minimum (1 coin ≈ €1 scale)
+assert.deepEqual([1, 2, 5, 10].map(C.commissionFor), [0, 0, 0, 1]);
 assert.equal(C.underCap(0, 5), 5);
-assert.equal(C.underCap(1998, 5), 2);
-assert.equal(C.underCap(2000, 5), 0);
-assert.equal(C.underCap(2500, 5), 0);
-console.log('ok: commission is 5% of the stake, min 1, capped at 2,000 a day');
+assert.equal(C.underCap(18, 5), 2);
+assert.equal(C.underCap(20, 5), 0);
+assert.equal(C.underCap(25, 5), 0);
+console.log('ok: commission is 10% of the stake, capped at 20 a day');
 
 // drafts: a full one passes; every missing piece is called out
 const good = { title: 'bottle flip off the bridge', question: 'does it land?', labelA: 'lands it', labelB: 'tips over', outcome: 'a', pauseAt: 6, duration: 9, rights: true };
@@ -32,7 +32,7 @@ assert.equal(C.simulatedPlays('u1', 30), C.simulatedPlays('u1', 30));
 assert.equal(C.simulatedPlays('u1', 0), 0);
 const t = C.simulatedTake('u1', 200);
 assert.deepEqual(t, C.simulatedTake('u1', 200));
-assert.ok(t.earned >= 200 && t.earned <= 1000 && t.staked >= 2000);
+assert.ok(t.earned >= 5 && t.earned <= 100 && t.staked >= 200);
 const t2 = C.simulatedTake('u1', 201);
-assert.ok(t2.earned > t.earned && t2.staked > t.staked);
+assert.ok(t2.earned >= t.earned && t2.staked > t.staked);
 console.log('ok: simulated plays are stable and only grow');

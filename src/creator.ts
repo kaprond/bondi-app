@@ -9,9 +9,9 @@ import { Side } from './types';
  * payout, and it is the same whether the player wins or loses. So the creator earns from people
  * playing, not from people losing, and has no reason to steer anyone toward a side.
  */
-export const COMMISSION_RATE = 0.05; // 5% of every stake on your clip
-export const MIN_COMMISSION = 1; // a 10 or 20 coin call still pays 1
-export const DAILY_COMMISSION_CAP = 2000; // per creator per day, so alt accounts can't farm coins
+export const COMMISSION_RATE = 0.1; // 10% of every stake on your clip
+export const MIN_COMMISSION = 0; // small calls (under 10) pay nothing
+export const DAILY_COMMISSION_CAP = 20; // per creator per day, so alt accounts can't farm coins
 export const MAX_IN_REVIEW = 3; // clips one person can have waiting at once
 export const MAX_SECONDS = 60;
 export const MIN_TEASER_SECONDS = 2; // something has to happen before the pause
@@ -78,7 +78,7 @@ function rng(seed: string) {
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
 }
-const STAKES = [10, 20, 50, 100];
+const STAKES = [1, 2, 5, 10];
 
 /**
  * Demo only: how many simulated players have called a live clip after `minutes`.

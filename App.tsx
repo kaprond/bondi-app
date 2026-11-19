@@ -265,7 +265,7 @@ function Shell() {
     const p = befriendInviter(invite.from);
     try {
       setBalance(await api.redeemInvite(invite.code));
-      setToast({ id: Date.now(), text: `+500 from @${p.handle}’s invite. you’re friends now` });
+      setToast({ id: Date.now(), text: `+10 from @${p.handle}’s invite. you’re friends now` });
     } catch { /* code already used: still friends */ }
   };
 
@@ -312,7 +312,7 @@ function Shell() {
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} onDeleted={accountDeleted} />}
         {!CLIPS_LIVE && tab === 'feed' && <ClipsSoon topInset={insets.top} onPools={() => setTab('pools')} onInvite={async () => {
-          const r = await shareText(`come play LetsJam with me. friend pools with free coins, no cash. we both get 500 coins.`, inviteLink());
+          const r = await shareText(`come play LetsJam with me. friend pools with free coins, no cash. we both get 10 coins.`, inviteLink());
           if (r !== 'dismissed') recordShare();
           if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
         }} />}
@@ -332,7 +332,7 @@ function Shell() {
                   balance={balance} placeBet={placeBet} onNext={() => next(index)} />
               )}
               ListFooterComponent={<FeedEnd height={height} onPools={() => setTab('pools')} onCreate={() => setTab('create')} onInvite={async () => {
-                const r = await shareText(`come play LetsJam with me. guess what happens next, free coins, no cash. we both get 500 coins.`, inviteLink());
+                const r = await shareText(`come play LetsJam with me. guess what happens next, free coins, no cash. we both get 10 coins.`, inviteLink());
                 if (r !== 'dismissed') recordShare();
                 if (r === 'copied') setToast({ id: Date.now(), text: 'invite link copied' });
               }} />}
@@ -374,8 +374,8 @@ function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPo
     <View style={[styles.end, { height }]}>
       <T size={44}>🛵</T>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>you called them all</H>
-      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips land as players post them. until then, pull your friends in. you both get 500 coins.</T>
-      <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +500 each</T></Pressable>
+      <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips land as players post them. until then, pull your friends in. you both get 10 coins.</T>
+      <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +10 each</T></Pressable>
       <Pressable onPress={onPools} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>start a friend pool</T></Pressable>
       <Pressable onPress={onCreate} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>post your own clip · earn coins</T></Pressable>
     </View>
@@ -391,12 +391,12 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>short clips that pause right before the moment. call it with free coins. dropping soon.</T>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>for now: start a pool with your friends.</T>
       <Pressable onPress={onPools} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>start a friend pool</T></Pressable>
-      <Pressable onPress={onInvite} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>invite friends · +500 each</T></Pressable>
+      <Pressable onPress={onInvite} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>invite friends · +10 each</T></Pressable>
     </View>
   );
 }
 
-/** ?i=BND-XXXX&from=handle from a friend's invite link (web). */
+/** ?i=JAM-XXXX&from=handle from a friend's invite link (web). */
 function readInvite(): { code: string; from: string; pool?: string; crew?: string } | null {
   if (Platform.OS !== 'web') return null;
   try {
@@ -404,7 +404,7 @@ function readInvite(): { code: string; from: string; pool?: string; crew?: strin
     const code = (q.get('i') ?? '').toUpperCase(), from = (q.get('from') ?? '').replace(/[^a-z0-9._]/gi, '').toLowerCase();
     const pool = (q.get('pool') ?? '').toLowerCase(), crew = (q.get('crew') ?? '').toLowerCase();
     const uuid = (s: string) => (/^[0-9a-f-]{36}$/.test(s) ? s : undefined);
-    return /^BND-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
+    return /^(BND|JAM)-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
   } catch { return null; }
 }
 function clearInviteFromUrl() {

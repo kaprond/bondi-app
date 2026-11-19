@@ -42,6 +42,10 @@
     {
       "source": "/c/:id",
       "destination": "/api/crew?id=:id"
+    },
+    {
+      "source": "/r/:id",
+      "destination": "/api/result?id=:id"
     }
   ]
 }

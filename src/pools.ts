@@ -16,6 +16,11 @@ export interface Pool {
   /** ISO time after which nobody can join; the creator gets a nudge to call the result. */
   closesAt?: string;
   comments?: number;
+  /** 'weekly': a fresh round opens a week later, same question and options. */
+  repeat?: 'weekly';
+  round?: number;
+  /** Crew id (live only), for standings. */
+  groupId?: string;
 }
 
 /** Deadline helpers shared by the list and the pool screen. */
@@ -39,17 +44,17 @@ const nid = () => `p${++seq}`;
 export function createPoolsStore(debit: (n: number) => boolean, credit: (n: number) => void, onChange: (pools: Pool[]) => void = () => {}) {
   let pools: Pool[] = [
     {
-      id: nid(), groupName: 'party crew', question: 'do we make the 07:10 train to barcelona?', stake: 50, createdBy: 'alex',
+      id: nid(), groupName: 'party crew', question: 'do we make the 07:10 train to barcelona?', stake: 2, createdBy: 'alex',
       status: 'open', options: [{ id: 'o1', label: 'yes, all of us' }, { id: 'o2', label: 'someone misses it' }],
       entries: [{ userId: 'alex', optionId: 'o2' }, { userId: 'sam', optionId: 'o1' }, { userId: 'taylor', optionId: 'o2' }], votes: [],
     },
     {
-      id: nid(), groupName: 'house', question: 'who wins sunday’s padel final?', stake: 100, createdBy: 'sam',
+      id: nid(), groupName: 'house', question: 'who wins sunday’s padel final?', stake: 5, createdBy: 'sam',
       status: 'open', options: [{ id: 'o3', label: 'team jordan', memberId: 'jordan' }, { id: 'o4', label: 'team taylor', memberId: 'taylor' }],
       entries: [{ userId: 'sam', optionId: 'o3' }, { userId: 'alex', optionId: 'o4' }], votes: [],
     },
     {
-      id: nid(), groupName: 'college', question: 'ajax vs psv: who scores first?', stake: 20, createdBy: 'taylor',
+      id: nid(), groupName: 'college', question: 'ajax vs psv: who scores first?', stake: 1, createdBy: 'taylor',
       status: 'resolved', options: [{ id: 'o5', label: 'ajax' }, { id: 'o6', label: 'psv' }],
       entries: [{ userId: 'taylor', optionId: 'o5' }, { userId: 'sam', optionId: 'o6' }, { userId: 'alex', optionId: 'o5' }, { userId: 'jordan', optionId: 'o5' }],
       votes: [], proposedOptionId: 'o5', resolvedOptionId: 'o5',
@@ -75,14 +80,14 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
       seq = Math.max(seq, ...saved.map((p) => Number(p.id.slice(1)) || 0));
     },
 
-    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string; closesAt?: string }): Pool {
+    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string; closesAt?: string; repeat?: 'weekly' }): Pool {
       const topic = blockedTopic(input.question + ' ' + input.options.map((o) => o.label).join(' '));
       if (topic) throw new Error(`pools about ${topic} aren’t allowed. keep it fun for everyone.`);
       if (input.options.length < 2) throw new Error('add at least two outcomes.');
       const p: Pool = {
         id: nid(), groupName: input.groupName ?? 'house', question: input.question, stake: input.stake, createdBy: ME,
         subjectId: input.subjectId, status: input.subjectId ? 'pending_consent' : 'open',
-        options: input.options, entries: [], votes: [], closesAt: input.closesAt,
+        options: input.options, entries: [], votes: [], closesAt: input.closesAt, repeat: input.repeat, round: 1,
       };
       pools.unshift(p);
       onChange(pools);
@@ -90,6 +95,10 @@ export function createPoolsStore(debit: (n: number) => boolean, credit: (n: numb
     },
 
     /** Demo only: the named subject accepts. In the real app they get a push notification. */
+    stopRepeat(id: string) {
+      const p = pools.find((x) => x.id === id);
+      if (p) { p.repeat = undefined; onChange(pools); }
+    },
     simulateConsent(id: string) {
       const p = pools.find((x) => x.id === id)!;
       if (p.status === 'pending_consent') p.status = 'open';
@@ -152,7 +161,7 @@ export type PoolsStore = ReturnType<typeof createPoolsStore>;
 
 type ServerPool = {
   id: string; group_id: string; group_name: string; question: string; stake: number; created_by: string; subject: string | null;
-  status: PoolStatus | 'locked'; proposed: string | null; resolved: string | null; closes_at?: string | null; comments?: number;
+  status: PoolStatus | 'locked'; proposed: string | null; resolved: string | null; closes_at?: string | null; comments?: number; repeat?: 'weekly' | null; round?: number;
   options: { id: string; label: string; member: string | null }[];
   entries: { user: string; option: string }[]; votes: { user: string; confirm: boolean }[];
 };
@@ -164,6 +173,7 @@ const fromServer = (p: ServerPool): Pool => ({
   votes: p.votes.map((v) => ({ userId: toLocal(v.user)!, confirm: v.confirm })),
   proposedOptionId: p.proposed ?? undefined, resolvedOptionId: p.resolved ?? undefined,
   closesAt: p.closes_at ?? undefined, comments: Number(p.comments ?? 0),
+  repeat: p.repeat ?? undefined, round: Number(p.round ?? 1), groupId: p.group_id,
 });
 
 /**
@@ -205,7 +215,7 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     refresh,
 
-    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string; closesAt?: string }): Pool {
+    create(input: { question: string; stake: number; options: PoolOption[]; subjectId?: string; groupName?: string; closesAt?: string; repeat?: 'weekly' }): Pool {
       const topic = blockedTopic(input.question + ' ' + input.options.map((o) => o.label).join(' '));
       if (topic) throw new Error(`pools about ${topic} aren’t allowed. keep it fun for everyone.`);
       if (input.options.length < 2) throw new Error('add at least two outcomes.');
@@ -215,13 +225,13 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
       const p: Pool = {
         id: `tmp-${Date.now()}`, groupName: crew.name, question: input.question, stake: input.stake, createdBy: ME,
         subjectId: input.subjectId, status: input.subjectId ? 'pending_consent' : 'open', options: input.options, entries: [], votes: [],
-        closesAt: input.closesAt,
+        closesAt: input.closesAt, repeat: input.repeat, round: 1,
       };
       pools.unshift(p);
       changed();
-      track('pool_created', { stake: input.stake, deadline: !!input.closesAt, about_friend: !!input.subjectId });
+      track('pool_created', { stake: input.stake, deadline: !!input.closesAt, about_friend: !!input.subjectId, weekly: !!input.repeat });
       rpc<string>('create_pool', {
-        p_group: crew.id, p_closes_at: input.closesAt ?? null, p_question: input.question, p_stake: input.stake, p_subject: toServer(input.subjectId) ?? null,
+        p_group: crew.id, p_closes_at: input.closesAt ?? null, p_repeat: input.repeat ?? null, p_question: input.question, p_stake: input.stake, p_subject: toServer(input.subjectId) ?? null,
         p_options: input.options.map((o) => ({ label: o.label, member: toServer(o.memberId) ?? null })),
       }).then((id) => { p.id = id; }, (e: Error) => toast(e.message)).finally(refresh);
       return p;
@@ -230,6 +240,12 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
     /** The person a pool is about says yes or no. */
     consent(id: string, accept: boolean) { remote('consent_as_subject', { p_pool: id, p_accept: accept }); },
     simulateConsent(_id: string) { /* demo only */ },
+    /** Creator stops future weekly rounds. */
+    stopRepeat(id: string) {
+      const p = pools.find((x) => x.id === id);
+      if (p) { p.repeat = undefined; changed(); }
+      remote('stop_repeat', { p_pool: id });
+    },
 
     join(id: string, optionId: string) {
       const p = find(id);
