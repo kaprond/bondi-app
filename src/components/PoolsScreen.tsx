@@ -5,7 +5,7 @@ import { wallet } from '../api';
 import { onHydrate, save } from '../persist';
 import { Avatar } from '../avatar';
 import { CATEGORIES, Challenge, randomChallenge } from '../challenges';
-import { blockedTopic } from '../moderation';
+import { blockedTopic, forfeitProblem } from '../moderation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createLivePoolsStore, createPoolsStore, isClosed, LIVE, ME, nameOf, Pool, PoolOption, timeLeft } from '../pools';
 import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, useSocial } from '../social';
@@ -33,6 +33,7 @@ function useClock() {
   const [, set] = useState(0);
   useEffect(() => { const t = setInterval(() => set((n) => n + 1), 30000); return () => clearInterval(t); }, []);
 }
+const FORFEITS = ['buys the next round 🍻', 'gets the coffees ☕', 'does the dishes 🧽', 'sings karaoke 🎤', 'cooks dinner 🍝'];
 const DEADLINES: { label: string; mins?: number }[] = [
   { label: 'no deadline' }, { label: '1 hour', mins: 60 }, { label: 'tonight', mins: -1 }, { label: '24 hours', mins: 1440 }, { label: '3 days', mins: 4320 }, { label: '1 week', mins: 10080 },
 ];
@@ -132,7 +133,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
           <Pressable key={p.id} style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.99 }] }]} onPress={() => setView({ kind: 'detail', id: p.id })}>
             <View style={{ flex: 1, gap: 6 }}>
               <T weight="bold" size={16} color={colors.deep}>{p.question}</T>
-              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}{p.repeat || (p.round ?? 1) > 1 ? ` · 🔁 round ${p.round ?? 1}` : ''}</T>
+              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}{p.repeat || (p.round ?? 1) > 1 ? ` · 🔁 round ${p.round ?? 1}` : ''}{p.forfeit ? ` · 🎲 ${p.forfeit}` : ''}</T>
               <View style={styles.faces}>
                 {p.entries.slice(0, 5).map((e, i) => <View key={e.userId} style={{ marginLeft: i ? -8 : 0 }}><Avatar id={e.userId} size={26} /></View>)}
               </View>
@@ -349,6 +350,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   const [stake, setStake] = useState(draft?.stake ?? 2);
   const [deadline, setDeadline] = useState(3); // 24 hours
   const [weekly, setWeekly] = useState(false);
+  const [forfeit, setForfeit] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [lastKey, setLastKey] = useState(draft?.key);
   const live = question.length > 6 ? blockedTopic(question) : null;
@@ -374,7 +376,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   function submit() {
     try {
       if (!question.trim()) throw new Error('write a question first.');
-      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineAt(DEADLINES[deadline].mins), repeat: canRepeat && weekly ? 'weekly' : undefined });
+      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineAt(DEADLINES[deadline].mins), repeat: canRepeat && weekly ? 'weekly' : undefined, forfeit: forfeit.trim() || undefined });
       onDone(p.id);
     } catch (e) { setError((e as Error).message); }
   }
@@ -463,6 +465,17 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
         )}
       </View>
 
+      <View style={styles.field}>
+        <T weight="bold" color={colors.deep}>real-life stake <T size={13} color={colors.muted}>(optional)</T></T>
+        <T size={13} color={colors.muted}>what the wrong side owes the crew. just for fun: no money, LetsJam never moves any.</T>
+        <View style={styles.wrapRow}>
+          {FORFEITS.map((f) => <Chip key={f} label={f} active={forfeit === f} onPress={() => setForfeit(forfeit === f ? '' : f)} />)}
+        </View>
+        <TextInput style={styles.input} placeholder="or write your own: wears the loser hat 🎩" placeholderTextColor={colors.muted}
+          value={forfeit} onChangeText={(t) => { setForfeit(t); setError(null); }} maxLength={60} />
+        {forfeit.length > 2 && forfeitProblem(forfeit) && <T size={13} weight="semi" color={colors.orange}>{forfeitProblem(forfeit)}</T>}
+      </View>
+
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
       <PillButton label="create pool" onPress={submit} />
       <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>not allowed: drinking, health or injury, dating, looks, danger or crime, self-harm.</T>
@@ -496,6 +509,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
           <H size={36} color={colors.white}>{pot} coins</H>
           <T weight="semi" color={colors.white}>{p.stake} each · {p.entries.length} in · {statusLabel(p)}</T>
           {p.closesAt && p.status === 'open' && <T weight="bold" color={colors.yellow}>⏰ {closed ? 'closed for new picks' : timeLeft(p.closesAt)}</T>}
+          {p.forfeit && p.status !== 'resolved' && <T weight="bold" color={colors.white}>🎲 wrong side {p.forfeit}</T>}
         </View>
       </View>
 
@@ -556,6 +570,15 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
         </View>
       )}
       {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}
+      {p.status === 'resolved' && p.forfeit && (() => {
+        const losers = p.entries.filter((e) => e.optionId !== p.resolvedOptionId).map((e) => (e.userId === ME ? 'you' : nameOf(e.userId)));
+        return losers.length > 0 ? (
+          <View style={styles.notice}>
+            <T weight="bold" color={colors.deep}>🎲 real-life stake</T>
+            <T color={colors.deep}>{losers.join(', ')} {p.forfeit}. no excuses.</T>
+          </View>
+        ) : null;
+      })()}
       {p.status === 'resolved' && (
         <PillButton label={p.entries.some((e) => e.userId === ME && e.optionId === p.resolvedOptionId) ? 'brag about it 🏆' : 'share the result'}
           icon={<Ionicons name="share-social" size={18} color={colors.white} />}

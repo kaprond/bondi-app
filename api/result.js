@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
   const who = (p?.called_it ?? []).map((n) => '@' + n);
   const title = p ? `${p.winner} 🏆 ${who.length ? who.slice(0, 3).join(', ') + ' called it' : 'nobody called it'}` : 'a pool on LetsJam';
   const desc = p
-    ? `${p.question} · ${p.crew} · ${p.players} played, ${p.pot} coins in the pot. start your own pool: free coins, no cash.`
+    ? `${p.question} · ${p.crew} · ${p.players} played, ${p.pot} coins in the pot.${p.forfeit ? ` wrong side ${p.forfeit}.` : ''} start your own pool: free coins, no cash.`
     : 'friend pools with free coins. call it with your crew.';
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
