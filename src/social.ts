@@ -44,7 +44,7 @@ let crews: Crew[] = LIVE ? [] : [
   { id: 'college', name: 'college', emoji: '🎓', memberIds: [ME, 'alex', 'jordan', 'sam', 'taylor'] },
 ];
 /** Where the web app lives. Invite links open it with ?i=<code>&from=<handle>. */
-export const APP_URL = 'https://bondi-app-one.vercel.app';
+export const APP_URL = 'https://letsjamnow.com';
 const newCode = () => 'BND-' + Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
 /** Each player gets their own code (server-side: invite_codes in 0004_social.sql). */
 let myCode = newCode();

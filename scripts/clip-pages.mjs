@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SITE = 'https://bondi-app-one.vercel.app';
+const SITE = 'https://letsjamnow.com';
 
 export function feedClips(src = readFileSync(join(root, 'src/api.ts'), 'utf8')) {
   const get = (line, k) => line.match(new RegExp(`${k}: '((?:[^'\\\\]|\\\\.)*)'`))?.[1].replace(/\\'/g, "'");
