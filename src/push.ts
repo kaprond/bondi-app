@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LIVE, rpc } from './backend';
 import { emit } from './bus';
+import { track } from './track';
 
 /**
  * Push notifications (iPhone/Android app only). The database sends them through Expo when
@@ -39,6 +40,7 @@ export async function enablePush(ask: boolean): Promise<boolean> {
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
     const { data: token } = await n.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     await rpc('register_push_token', { p_token: token, p_platform: Platform.OS });
+    if (ask) track('push_enabled');
     return true;
   } catch (e) { console.warn('push register failed', e); return false; }
 }

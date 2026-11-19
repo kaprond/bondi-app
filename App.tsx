@@ -35,6 +35,7 @@ import { H, T } from './src/components/ui';
 import { BlobBanner } from './src/components/Blob';
 import { BarTone, TopBar } from './src/components/TopBar';
 import { Welcome } from './src/components/Welcome';
+import { track } from './src/track';
 import { recordShare, setSound, useStats } from './src/session';
 import { Toast } from './src/components/Toast';
 import { colors, radius } from './src/theme';
@@ -168,11 +169,25 @@ function Shell() {
     })();
   }, []);
 
+  useEffect(() => { if (ageOk) track('app_open'); }, [ageOk]);
+
+  // Opened from a crew invite link: join the crew, become friends with whoever shared it.
+  const joinedCrew = useRef(false);
+  useEffect(() => {
+    if (!invite?.crew || joinedCrew.current || ageOk !== true || setup || !LIVE) return;
+    joinedCrew.current = true;
+    track('crew_link_opened');
+    rpc('join_crew_link', { p_group: invite.crew, p_code: invite.code })
+      .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew. start a pool or jump into one 🔥` }); })
+      .catch((e: Error) => setToast({ id: Date.now(), text: e.message }));
+  }, [invite, ageOk, setup]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Opened from a shared pool link: join that pool's crew and open the pool.
   const joinedPool = useRef(false);
   useEffect(() => {
     if (!invite?.pool || joinedPool.current || ageOk !== true || setup || !LIVE) return;
     joinedPool.current = true;
+    track('pool_link_opened');
     rpc('join_pool_link', { p_pool: invite.pool, p_code: invite.code })
       .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setOpenPool({ id: invite.pool!, n: Date.now() }); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew now. make your call` }); })
       .catch((e: Error) => setToast({ id: Date.now(), text: e.message }));
@@ -182,7 +197,7 @@ function Shell() {
   useEffect(() => {
     if (!invite || ageOk !== true || setup) return;
     clearInviteFromUrl();
-    if (invite.code === inviteCode()) return;
+    if (invite.code === inviteCode() || invite.crew || invite.pool) return; // crew/pool links connect you themselves
     const p = befriendInviter(invite.from, { request: true });
     setToast({ id: Date.now(), text: LIVE ? `friend request sent to @${p.handle}` : `you and @${p.handle} are friends now` });
   }, [invite, ageOk]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -243,6 +258,7 @@ function Shell() {
 
   const welcomeDone = async () => {
     setSound(true); setAgeOk(true); setSetup(true); AsyncStorage.setItem(AGE_KEY, '1').catch(() => {});
+    track('welcome_done', { invited: !!invite, via: invite?.crew ? 'crew' : invite?.pool ? 'pool' : invite ? 'friend' : 'none' });
     if (!invite) return;
     clearInviteFromUrl();
     if (invite.code === inviteCode()) return;
@@ -277,7 +293,7 @@ function Shell() {
 
   if (setup) return (
     <View style={{ flex: 1 }}>
-      <SetupProfile topInset={insets.top} onDone={() => setSetup(false)} />
+      <SetupProfile topInset={insets.top} onDone={() => { track('profile_done'); setSetup(false); }} />
       {toast && <Toast id={toast.id} text={toast.text} top={insets.top + 12} onDone={clearToast} />}
     </View>
   );
@@ -381,13 +397,14 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
 }
 
 /** ?i=BND-XXXX&from=handle from a friend's invite link (web). */
-function readInvite(): { code: string; from: string; pool?: string } | null {
+function readInvite(): { code: string; from: string; pool?: string; crew?: string } | null {
   if (Platform.OS !== 'web') return null;
   try {
     const q = new URLSearchParams((globalThis as { location?: Location }).location?.search ?? '');
     const code = (q.get('i') ?? '').toUpperCase(), from = (q.get('from') ?? '').replace(/[^a-z0-9._]/gi, '').toLowerCase();
-    const pool = (q.get('pool') ?? '').toLowerCase();
-    return /^BND-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: /^[0-9a-f-]{36}$/.test(pool) ? pool : undefined } : null;
+    const pool = (q.get('pool') ?? '').toLowerCase(), crew = (q.get('crew') ?? '').toLowerCase();
+    const uuid = (s: string) => (/^[0-9a-f-]{36}$/.test(s) ? s : undefined);
+    return /^BND-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
   } catch { return null; }
 }
 function clearInviteFromUrl() {

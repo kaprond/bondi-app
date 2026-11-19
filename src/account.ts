@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LIVE, resetSession, sb } from './backend';
 import { emit } from './bus';
+import { track } from './track';
 
 /**
  * Real login on top of the anonymous account everyone starts with.
@@ -64,6 +65,7 @@ export async function startSaveEmail(raw: string): Promise<string> {
 export async function finishSaveEmail(email: string, code: string): Promise<void> {
   const { error } = await need().auth.verifyOtp({ email, token: code.trim(), type: 'email_change' });
   if (error) throw new Error(nice(error.message));
+  track('account_saved', { via: 'email' });
   await refreshAccount();
 }
 
@@ -106,6 +108,7 @@ export async function saveWithApple(): Promise<'saved' | 'exists' | 'cancelled'>
     if (/already|exists/i.test(error.message)) return 'exists';
     throw new Error(nice(error.message));
   }
+  track('account_saved', { via: 'apple' });
   await refreshAccount();
   return 'saved';
 }
