@@ -3,9 +3,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from '../theme';
 import { H, PillButton, T } from './ui';
 import { ART_HERO } from './Blob';
+import { useEffect } from 'react';
+import { track } from '../track';
 
 export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAccept: () => void; topInset: number; bottomInset: number; invitedBy?: string }) {
   const { width, height } = useWindowDimensions();
+  useEffect(() => { track('welcome_seen', { invited: !!invitedBy }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const hero = Math.min(width - 44, 360, height * 0.4);
   // launch: friend pools first, clips come later
   const steps: [keyof typeof Ionicons.glyphMap, string][] = [

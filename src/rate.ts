@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
+import { track } from './track';
 
 const KEY = 'rate_asked_at';
 const GAP = 60 * 24 * 3600 * 1000; // at most every ~60 days (Apple caps it at 3 a year anyway)
@@ -13,6 +14,7 @@ export async function askForRatingAfterWin() {
     if (Date.now() - last < GAP) return;
     if (!(await StoreReview.hasAction())) return;
     await AsyncStorage.setItem(KEY, String(Date.now()));
+    track('review_prompted');
     setTimeout(() => { StoreReview.requestReview().catch(() => {}); }, 1500); // let the trophy land first
   } catch { /* never block the pool screen */ }
 }

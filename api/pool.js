@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
   const title = p ? `${p.question}` : 'join my pool on LetsJam';
   const who = p?.by ? `@${p.by}` : from ? `@${from}` : 'a friend';
   const desc = p
-    ? `${who} started a pool in ${p.crew}. ${p.pot > 0 ? `${p.pot} coins in the pot, ` : ''}${p.stake} each.${p.forfeit ? ` wrong side ${p.forfeit}.` : ''} tap to make your call. free coins, no cash.`
+    ? `${who} started a pool in ${p.crew}. ${p.crew_size > (p.players ?? 0) ? `${p.players ?? 0} of ${p.crew_size} called it. ` : ''}${p.pot > 0 ? `${p.pot} coins in the pot, ` : ''}${p.stake} each.${p.forfeit ? ` wrong side ${p.forfeit}.` : ''} tap to make your call. free coins, no cash.`
     : `${who} wants you in a friend pool. free coins, no cash.`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
 <meta name="description" content="${esc(desc)}" />
 <meta property="og:type" content="website" /><meta property="og:site_name" content="LetsJam" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" />
-<meta property="og:url" content="${esc(site + url.pathname)}" /><meta property="og:image" content="${site}/og.png" />
+<meta property="og:url" content="${esc(site + url.pathname)}" /><meta property="og:image" content="${p ? `${site}/api/card?pool=${encodeURIComponent(id)}&n=${p.players ?? 0}` : `${site}/og.png`}" />
 <meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta http-equiv="refresh" content="0; url=${esc(target)}" />

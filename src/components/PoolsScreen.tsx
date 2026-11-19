@@ -12,6 +12,7 @@ import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, use
 import { REACTIONS, useThread } from '../thread';
 import { Period, useStandings } from '../standings';
 import { track } from '../track';
+import { toast } from '../bus';
 import { shareText } from '../share';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
@@ -53,7 +54,7 @@ async function shareCrew(c: Crew) {
   return r !== 'dismissed';
 }
 
-type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string } | { kind: 'crew'; id: string };
+type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string; fresh?: boolean } | { kind: 'crew'; id: string };
 
 /** `intent` asks the screen to open "create" with a challenge about one friend (from their profile). */
 export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number }; openPool?: { id: string; n: number } }) {
@@ -81,11 +82,12 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
   // Opened from a push notification or a shared pool link
   useEffect(() => { if (openPool?.id) setView({ kind: 'detail', id: openPool.id }); }, [openPool?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (view.kind === 'create') return <CreatePool renderBar={renderBar} draft={view.draft} onDone={(id) => { refresh(); setView(id ? { kind: 'detail', id } : { kind: 'list' }); }} />;
+  if (view.kind === 'create') return <CreatePool renderBar={renderBar} draft={view.draft} onDone={(id) => { refresh(); setView(id ? { kind: 'detail', id, fresh: true } : { kind: 'list' }); }} />;
   if (view.kind === 'detail') {
-    const p = pools.find((x) => x.id === view.id);
+    const id = 'resolveId' in store ? store.resolveId(view.id) : view.id;
+    const p = pools.find((x) => x.id === id);
     if (!p) { setTimeout(() => setView({ kind: 'list' })); return null; }
-    return <PoolDetail renderBar={renderBar} pool={p} onBack={() => setView({ kind: 'list' })} refresh={refresh} />;
+    return <PoolDetail renderBar={renderBar} pool={p} fresh={view.fresh} onBack={() => setView({ kind: 'list' })} refresh={refresh} />;
   }
   if (view.kind === 'crew') {
     const c = crewList().find((x) => x.id === view.id);
@@ -139,6 +141,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
               <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}{p.repeat || (p.round ?? 1) > 1 ? ` · 🔁 round ${p.round ?? 1}` : ''}{p.forfeit ? ` · 🎲 ${p.forfeit}` : ''}</T>
               <View style={styles.faces}>
                 {p.entries.slice(0, 5).map((e, i) => <View key={e.userId} style={{ marginLeft: i ? -8 : 0 }}><Avatar id={e.userId} size={26} /></View>)}
+                <T size={12} weight="bold" color={colors.muted} style={{ marginLeft: p.entries.length ? 8 : 0, alignSelf: 'center' }}>{whoIn(p)}</T>
               </View>
             </View>
             <View style={styles.pot}>
@@ -486,7 +489,22 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   );
 }
 
-function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBack: () => void; refresh: () => void; renderBar: RenderBar }) {
+/** How many of the crew called it: "3 of 5 called it" (or "3 in" when the crew size is unknown). */
+function whoIn(p: Pool) {
+  const size = crewList().find((c) => (p.groupId ? c.id === p.groupId : c.name === p.groupName))?.memberIds.length ?? 0;
+  const n = p.entries.length;
+  return size > n ? `${n} of ${size} called it` : `${n} in`;
+}
+/** One tap: the pool link (with its live preview card) into the group chat. */
+async function sharePool(p: Pool, via: string) {
+  const link = `${APP_URL}/p/${p.id}?i=${inviteCode()}&from=${encodeURIComponent(me().handle)}`;
+  const r = await shareText(`${p.question} 👀 i started a pool on LetsJam, make your call:`, link);
+  if (r !== 'dismissed') track('pool_shared', { via });
+  if (r === 'copied') toast('link copied. paste it in the group chat 👊');
+  return r;
+}
+
+function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool; onBack: () => void; refresh: () => void; renderBar: RenderBar; fresh?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const mine = p.entries.find((e) => e.userId === ME);
   const myVote = p.votes.find((v) => v.userId === ME);
@@ -497,6 +515,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
   const [reporting, setReporting] = useState<{ userId: string } | null>(null);
   const closed = isClosed(p);
   useClock();
+  const saving = p.id.startsWith('tmp-');
+  const askToShare = LIVE && ['open', 'pending_consent'].includes(p.status) && !closed && (fresh || (p.createdBy === ME && p.entries.length <= 1));
   const iWon = p.status === 'resolved' && !!mine && mine.optionId === p.resolvedOptionId;
   useEffect(() => { if (iWon) askForRatingAfterWin(); }, [iWon]);
 
@@ -512,11 +532,20 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
         <Coin size={28} />
         <View>
           <H size={36} color={colors.white}>{pot} coins</H>
-          <T weight="semi" color={colors.white}>{p.stake} each · {p.entries.length} in · {statusLabel(p)}</T>
+          <T weight="semi" color={colors.white}>{p.stake} each · {whoIn(p)} · {statusLabel(p)}</T>
           {p.closesAt && p.status === 'open' && <T weight="bold" color={colors.yellow}>⏰ {closed ? 'closed for new picks' : timeLeft(p.closesAt)}</T>}
           {p.forfeit && p.status !== 'resolved' && <T weight="bold" color={colors.white}>🎲 wrong side {p.forfeit}</T>}
         </View>
       </View>
+
+      {askToShare && (
+        <View style={[styles.notice, { backgroundColor: colors.yellow }]}>
+          <T weight="bold" size={16} color={colors.deep}>{p.entries.length === 0 ? 'pool’s live 🔥 now get the crew in' : 'more people = bigger pot 👀'}</T>
+          <T color={colors.deep}>drop it in the group chat. they see the question and who’s in, one tap and they’re playing.</T>
+          <PillButton label={saving ? 'saving…' : 'send to the group chat'} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.white} />}
+            onPress={() => { if (!saving) sharePool(p, fresh ? 'after_create' : 'detail'); }} />
+        </View>
+      )}
 
       {p.status === 'pending_consent' && (
         <View style={styles.notice}>
@@ -601,13 +630,9 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
       )}
       {p.status === 'voided' && <View style={styles.notice}><T weight="semi" color={colors.deep}>no majority confirmed, so the pool was cancelled and everyone got their coins back.</T></View>}
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
-      {LIVE && !settledStatus(p) && (
+      {LIVE && !settledStatus(p) && !askToShare && (
         <PillButton label="invite friends to this pool" variant="ghost" icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />}
-          onPress={async () => {
-            const link = `${APP_URL}/p/${p.id}?i=${inviteCode()}&from=${encodeURIComponent(me().handle)}`;
-            const r = await shareText(`${p.question} 👀 i started a pool on LetsJam, make your call:`, link);
-            if (r !== 'dismissed') track('pool_shared');
-          }} />
+          onPress={() => { if (!saving) sharePool(p, 'detail_bottom'); }} />
       )}
       <TrashTalk poolId={p.id} onReport={(userId) => setReporting({ userId })} />
       {p.createdBy !== ME && (
