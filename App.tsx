@@ -396,7 +396,7 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
   );
 }
 
-/** ?i=BND-XXXX&from=handle from a friend's invite link (web). */
+/** ?i=JAM-XXXX&from=handle from a friend's invite link (web). */
 function readInvite(): { code: string; from: string; pool?: string; crew?: string } | null {
   if (Platform.OS !== 'web') return null;
   try {
@@ -404,7 +404,7 @@ function readInvite(): { code: string; from: string; pool?: string; crew?: strin
     const code = (q.get('i') ?? '').toUpperCase(), from = (q.get('from') ?? '').replace(/[^a-z0-9._]/gi, '').toLowerCase();
     const pool = (q.get('pool') ?? '').toLowerCase(), crew = (q.get('crew') ?? '').toLowerCase();
     const uuid = (s: string) => (/^[0-9a-f-]{36}$/.test(s) ? s : undefined);
-    return /^BND-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
+    return /^(BND|JAM)-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
   } catch { return null; }
 }
 function clearInviteFromUrl() {

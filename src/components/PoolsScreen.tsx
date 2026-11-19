@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createLivePoolsStore, createPoolsStore, isClosed, LIVE, ME, nameOf, Pool, PoolOption, timeLeft } from '../pools';
 import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, useSocial } from '../social';
 import { REACTIONS, useThread } from '../thread';
+import { Period, useStandings } from '../standings';
 import { track } from '../track';
 import { shareText } from '../share';
 import { colors, fonts, radius, shadow } from '../theme';
@@ -49,7 +50,7 @@ async function shareCrew(c: Crew) {
   return r !== 'dismissed';
 }
 
-type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string };
+type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string } | { kind: 'crew'; id: string };
 
 /** `intent` asks the screen to open "create" with a challenge about one friend (from their profile). */
 export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number }; openPool?: { id: string; n: number } }) {
@@ -82,6 +83,12 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
     if (!p) { setTimeout(() => setView({ kind: 'list' })); return null; }
     return <PoolDetail renderBar={renderBar} pool={p} onBack={() => setView({ kind: 'list' })} refresh={refresh} />;
   }
+  if (view.kind === 'crew') {
+    const c = crewList().find((x) => x.id === view.id);
+    if (!c) { setTimeout(() => setView({ kind: 'list' })); return null; }
+    return <CrewView renderBar={renderBar} crew={c} pools={store.list().filter((p) => (p.groupId ? p.groupId === c.id : p.groupName === c.name))}
+      onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'detail', id })} onNew={() => setView({ kind: 'create', draft: { key: '', category: '', emoji: '', question: '', mode: 'yesno', outcomes: [], memberIds: [], stake: 50, crew: c.name } })} />;
+  }
 
   const settled = (p: Pool) => ['resolved', 'voided', 'rejected'].includes(p.status);
   const shown = pools.filter((p) => (tab === 'active' ? !settled(p) : settled(p)));
@@ -97,7 +104,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
             <Ionicons name="add" size={26} color={colors.brand} />
           </Pressable>
           {crews.map((g) => (
-            <Pressable key={g.id} style={styles.groupItem} onPress={() => shareCrew(g)} accessibilityRole="button" accessibilityLabel={`invite friends to ${g.name}`}>
+            <Pressable key={g.id} style={styles.groupItem} onPress={() => setView({ kind: 'crew', id: g.id })} accessibilityRole="button" accessibilityLabel={`${g.name} standings`}>
               <View style={styles.groupAvatar}><T size={22}>{g.emoji}</T></View>
               <T weight="bold" size={13} color={colors.white}>{g.name} · {g.memberIds.length}</T>
             </Pressable>
@@ -125,7 +132,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
           <Pressable key={p.id} style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.99 }] }]} onPress={() => setView({ kind: 'detail', id: p.id })}>
             <View style={{ flex: 1, gap: 6 }}>
               <T weight="bold" size={16} color={colors.deep}>{p.question}</T>
-              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}</T>
+              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}{p.repeat || (p.round ?? 1) > 1 ? ` · 🔁 round ${p.round ?? 1}` : ''}</T>
               <View style={styles.faces}>
                 {p.entries.slice(0, 5).map((e, i) => <View key={e.userId} style={{ marginLeft: i ? -8 : 0 }}><Avatar id={e.userId} size={26} /></View>)}
               </View>
@@ -341,9 +348,11 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   const [group, setGroup] = useState(draft?.crew ?? crews[0]?.name ?? 'house');
   const [stake, setStake] = useState(draft?.stake ?? 50);
   const [deadline, setDeadline] = useState(3); // 24 hours
+  const [weekly, setWeekly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastKey, setLastKey] = useState(draft?.key);
   const live = question.length > 6 ? blockedTopic(question) : null;
+  const canRepeat = DEADLINES[deadline].mins !== undefined && !(mode !== 'members' && subject);
   const crew = crews.find((c) => c.name === group) ?? crews[0];
   const friends = (crew?.memberIds ?? []).filter((m) => m !== ME);
 
@@ -365,7 +374,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   function submit() {
     try {
       if (!question.trim()) throw new Error('write a question first.');
-      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineAt(DEADLINES[deadline].mins) });
+      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineAt(DEADLINES[deadline].mins), repeat: canRepeat && weekly ? 'weekly' : undefined });
       onDone(p.id);
     } catch (e) { setError((e as Error).message); }
   }
@@ -443,6 +452,15 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
         <T weight="bold" color={colors.deep}>closes in</T>
         <View style={styles.wrapRow}>{DEADLINES.map((d, i) => <Chip key={d.label} label={d.label} active={deadline === i} onPress={() => setDeadline(i)} />)}</View>
         <T size={13} color={colors.muted}>{DEADLINES[deadline].mins === undefined ? 'open until you call the result.' : 'no new picks after this. we’ll nudge the crew an hour before, and you when it’s time to call it.'}</T>
+        {canRepeat && (
+          <Pressable onPress={() => setWeekly((w) => !w)} style={styles.toggleRow} accessibilityRole="switch" accessibilityState={{ checked: weekly }}>
+            <Ionicons name={weekly ? 'checkbox' : 'square-outline'} size={22} color={colors.brand} />
+            <View style={{ flex: 1 }}>
+              <T weight="bold" color={colors.deep}>🔁 run it every week</T>
+              <T size={13} color={colors.muted}>a new round opens when this one closes. same question, same picks. stop it any time.</T>
+            </View>
+          </Pressable>
+        )}
       </View>
 
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
@@ -469,7 +487,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
     <ScrollView style={styles.page} contentContainerStyle={styles.body}>
       <View style={styles.inBar}>{renderBar('light')}</View>
       <BackBar label="pools" onBack={onBack} />
-      <Eyebrow label={p.groupName + (p.subjectId ? ` · about ${nameOf(p.subjectId)}` : '')} />
+      <Eyebrow label={p.groupName + (p.subjectId ? ` · about ${nameOf(p.subjectId)}` : '') + ((p.round ?? 1) > 1 || p.repeat ? ` · 🔁 round ${p.round ?? 1}` : '')} />
       <H size={32}>{p.question}</H>
 
       <View style={styles.potCard}>
@@ -538,6 +556,21 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
         </View>
       )}
       {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}
+      {p.status === 'resolved' && (
+        <PillButton label={p.entries.some((e) => e.userId === ME && e.optionId === p.resolvedOptionId) ? 'brag about it 🏆' : 'share the result'}
+          icon={<Ionicons name="share-social" size={18} color={colors.white} />}
+          onPress={async () => {
+            const winner = p.options.find((o) => o.id === p.resolvedOptionId)?.label ?? '';
+            const link = `${APP_URL}/r/${p.id}?i=${inviteCode()}&from=${encodeURIComponent(me().handle)}`;
+            const r = await shareText(`${p.question} → ${winner} 🏆`, link);
+            if (r !== 'dismissed') track('result_shared');
+          }} />
+      )}
+      {p.repeat && p.createdBy === ME && (
+        <Pressable onPress={() => store.stopRepeat(p.id)} style={{ alignSelf: 'center', paddingVertical: 6 }} accessibilityRole="button">
+          <T size={13} weight="bold" color={colors.muted}>stop the weekly rounds</T>
+        </Pressable>
+      )}
       {p.status === 'voided' && <View style={styles.notice}><T weight="semi" color={colors.deep}>no majority confirmed, so the pool was cancelled and everyone got their coins back.</T></View>}
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
       {LIVE && !settledStatus(p) && (
@@ -557,6 +590,60 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar }: { pool: Pool; onBac
     </ScrollView>
     {reporting && <ReportSheet poolId={p.id} userId={reporting.userId} onClose={() => setReporting(null)} onBlocked={reporting.userId === p.createdBy ? onBack : undefined} />}
     </View>
+  );
+}
+
+/** A crew: who's on top this month, streaks, invite, start a pool here. */
+function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Crew; pools: Pool[]; renderBar: RenderBar; onBack: () => void; onOpen: (id: string) => void; onNew: () => void }) {
+  const [period, setPeriod] = useState<Period>('month');
+  useEffect(() => { track('standings_viewed'); }, []);
+  const rows = useStandings(crew.id, crew.memberIds, pools, period);
+  const open = pools.filter((p) => p.status === 'open' || p.status === 'proposed');
+  const month = new Date().toLocaleString('en', { month: 'long' }).toLowerCase();
+  return (
+    <ScrollView style={styles.page} contentContainerStyle={styles.body}>
+      <View style={styles.inBar}>{renderBar('light')}</View>
+      <BackBar label="pools" onBack={onBack} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={styles.groupAvatar}><T size={26}>{crew.emoji}</T></View>
+        <View style={{ flex: 1 }}><H size={30}>{crew.name}</H><T color={colors.muted}>{crew.memberIds.length} in the crew</T></View>
+      </View>
+      <View style={{ gap: 8 }}>
+        <PillButton label="invite on WhatsApp" variant="ghost" onPress={() => shareCrew(crew)} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />} />
+        <PillButton label="new pool" onPress={onNew} icon={<Ionicons name="add" size={18} color={colors.white} />} />
+      </View>
+
+      <Eyebrow label={period === 'month' ? `standings · ${month}` : 'standings · all time'} />
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Chip label="this month" active={period === 'month'} onPress={() => setPeriod('month')} />
+          <Chip label="all time" active={period === 'all'} onPress={() => setPeriod('all')} />
+        </View>
+      </View>
+      <View style={styles.board}>
+        {rows === null && <T color={colors.muted}>loading…</T>}
+        {rows && rows.every((r) => r.played === 0) && <T color={colors.muted}>no settled pools {period === 'month' ? 'this month' : 'yet'}. call one and the table fills up.</T>}
+        {rows?.filter((r) => r.played > 0).map((r, i) => (
+          <View key={r.userId} style={[styles.boardRow, i === 0 && { backgroundColor: colors.tint }]}>
+            <T weight="bold" size={18} color={colors.deep} style={{ width: 28 }}>{i === 0 ? '👑' : i + 1}</T>
+            <Avatar id={r.userId} size={34} />
+            <View style={{ flex: 1 }}>
+              <T weight="bold" color={colors.deep}>{r.userId === ME ? 'you' : nameOf(r.userId)}{r.streak >= 2 ? `  🔥${r.streak}` : ''}</T>
+              <T size={13} color={colors.muted}>called {r.won} of {r.played}</T>
+            </View>
+            <T weight="bold" color={r.net >= 0 ? colors.win : colors.orange}>{r.net >= 0 ? '+' : ''}{r.net}</T>
+          </View>
+        ))}
+      </View>
+
+      {open.length > 0 && <Eyebrow label="open in this crew" />}
+      {open.map((p) => (
+        <Pressable key={p.id} style={styles.card} onPress={() => onOpen(p.id)}>
+          <T weight="bold" size={16} color={colors.deep}>{p.question}</T>
+          <T size={13} color={colors.muted}>{statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}</T>
+        </Pressable>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -651,6 +738,9 @@ const styles = StyleSheet.create({
   stepNum: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.royal, alignItems: 'center', justifyContent: 'center' },
   emojiPick: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cloud },
   emojiOn: { backgroundColor: colors.tint, borderWidth: 2, borderColor: colors.brand },
+  toggleRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 6 },
+  board: { backgroundColor: colors.white, borderRadius: radius.card, padding: 8, gap: 2, ...shadow.soft },
+  boardRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14 },
   react: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.cloud, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'transparent' },
   reactOn: { borderColor: colors.brand, backgroundColor: colors.tint },
   comment: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },

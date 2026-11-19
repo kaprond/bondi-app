@@ -110,7 +110,7 @@ export function createMockApi(): BondiApi {
       return { balance: wallet.balance, amount, dayStreak };
     },
     async redeemInvite(code) {
-      if (!/^BND-[A-Z0-9]{4}$/.test(code.toUpperCase())) throw new Error('invite code not found');
+      if (!/^(BND|JAM)-[A-Z0-9]{4}$/.test(code.toUpperCase())) throw new Error('invite code not found');
       if (redeemed) throw new Error('you already used an invite code');
       redeemed = true;
       save({ redeemed });
