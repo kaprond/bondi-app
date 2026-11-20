@@ -53,6 +53,8 @@ export function wirePush(): () => void {
   const open = (data: Record<string, unknown> | undefined, key = '') => {
     if (key && key !== lastOpened) { lastOpened = key; track('push_opened', { go: String(data?.go ?? ''), nudge: String(data?.nudge ?? '') }); }
     if (data?.go === 'pool') emit({ kind: 'go', to: 'pools', poolId: typeof data.id === 'string' ? data.id : undefined });
+    else if (data?.go === 'crew') emit({ kind: 'go', to: 'pools', crewId: typeof data.id === 'string' ? data.id : undefined });
+    else if (data?.go === 'pools') emit({ kind: 'go', to: 'pools' });
     else if (data?.go === 'friends') emit({ kind: 'go', to: 'friends' });
   };
   n.getLastNotificationResponseAsync().then((r) => r && open(r.notification.request.content.data as Record<string, unknown>, r.notification.request.identifier)).catch(() => {});

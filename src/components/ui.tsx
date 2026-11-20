@@ -1,5 +1,6 @@
-import { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
+import { ReactNode, useEffect, useRef } from 'react';
+import { AccessibilityInfo, ActivityIndicator, Animated, Easing, Pressable, StyleProp, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
+import { haptic } from '../haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fonts, radius, shadow } from '../theme';
 
@@ -26,7 +27,7 @@ export function PillButton({ label, onPress, disabled, busy, variant = 'brand', 
   };
   const fg = variant === 'white' ? colors.brand : variant === 'ghost' ? colors.deep : colors.white;
   return (
-    <Pressable onPress={onPress} disabled={disabled || busy} accessibilityRole="button" accessibilityLabel={label}
+    <Pressable onPress={onPress ? () => { haptic.press(); onPress(); } : undefined} disabled={disabled || busy} accessibilityRole="button" accessibilityLabel={label}
       style={({ pressed }) => [{ borderRadius: radius.pill, opacity: disabled ? 0.45 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
         variant !== 'ghost' && shadow.button, variant === 'ghost' && { borderWidth: 1.5, borderColor: colors.line }, style]}>
       <LinearGradient colors={grad[variant]} style={styles.pill}>
@@ -41,10 +42,57 @@ export function PillButton({ label, onPress, disabled, busy, variant = 'brand', 
 
 export function Chip({ label, active, onPress, disabled }: { label: string; active?: boolean; onPress?: () => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: active, disabled }}
-      style={[styles.chip, active && styles.chipOn, disabled && { opacity: 0.35 }]}>
+    <Pressable onPress={onPress ? () => { haptic.tap(); onPress(); } : undefined} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: active, disabled }}
+      style={({ pressed }) => [styles.chip, active && styles.chipOn, disabled && { opacity: 0.35 }, pressed && { transform: [{ scale: 0.96 }] }]}>
       <Text style={[styles.chipText, active && { color: colors.white }]}>{label}</Text>
     </Pressable>
+  );
+}
+
+/** Grey shimmer block while something loads (instead of "loading…"). */
+export function Skeleton({ height = 16, width = '100%', radius: r = 8, style }: { height?: number; width?: number | `${number}%`; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0.45, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={[{ height, width, borderRadius: r, backgroundColor: colors.tint, opacity: pulse }, style]} />;
+}
+
+/** A row of skeleton lines shaped like a list item. */
+export function SkeletonRows({ rows = 3 }: { rows?: number }) {
+  return (
+    <View style={{ gap: 14 }}>
+      {Array.from({ length: rows }, (_, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Skeleton width={34} height={34} radius={17} />
+          <View style={{ flex: 1, gap: 6 }}><Skeleton width="60%" height={14} /><Skeleton width="35%" height={11} /></View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Screens slide up and fade in instead of popping. Respects reduced motion. */
+export function FadeIn({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      if (!alive) return;
+      if (reduce) t.setValue(1);
+      else Animated.timing(t, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }).catch(() => t.setValue(1));
+    return () => { alive = false; };
+  }, [t]);
+  return (
+    <Animated.View style={[{ flex: 1, opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }, style]}>
+      {children}
+    </Animated.View>
   );
 }
 

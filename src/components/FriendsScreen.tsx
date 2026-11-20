@@ -15,8 +15,11 @@ import { Chip, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { PersonSheet } from './PersonSheet';
+import { Rival, useRivals } from '../rivals';
+import { poolsSnapshot } from './PoolsScreen';
 
 export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar; onPoolWith: (friendId: string) => void }) {
+  const rivals = useRivals(poolsSnapshot);
   useSocial();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -121,7 +124,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
 
           <Section title={`friends (${friends.length})`}>
             {friends.length === 0 && <T color={colors.muted}>no friends yet. invite your besties above.</T>}
-            {friends.map((p) => <PersonRow key={p.id} p={p} onPress={() => setOpen(p.id)} />)}
+            {friends.map((p) => <PersonRow key={p.id} p={p} rival={rivals.find((r) => r.userId === p.id)} onPress={() => setOpen(p.id)} />)}
           </Section>
 
           {suggestions().length > 0 && (
@@ -166,13 +169,13 @@ export function RelationButton({ id, compact }: { id: string; compact?: boolean 
   );
 }
 
-function PersonRow({ p, onPress }: { p: Person; onPress: () => void }) {
+function PersonRow({ p, onPress, rival }: { p: Person; onPress: () => void; rival?: Rival }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]} accessibilityRole="button">
       <Avatar id={p.id} size={44} />
       <View style={{ flex: 1 }}>
         <T weight="bold" color={colors.deep}>{p.name}</T>
-        <T size={13} color={colors.muted}>@{p.handle} · {p.city}</T>
+        <T size={13} color={colors.muted}>@{p.handle} · {p.city}{rival ? ` · ⚔️ ${rival.me}–${rival.them}` : ''}</T>
       </View>
       <RelationButton id={p.id} compact />
     </Pressable>

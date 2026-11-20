@@ -96,6 +96,7 @@ function Shell() {
   const [warmup, setWarmup] = useState(false);
   const [poolIntent, setPoolIntent] = useState<{ friendId: string; n: number } | undefined>();
   const [openPool, setOpenPool] = useState<{ id: string; n: number } | undefined>();
+  const [openCrew, setOpenCrew] = useState<{ id: string; n: number } | undefined>();
   const { width: winW } = useWindowDimensions();
   const social = useSocial();
   const league = useLeague();
@@ -113,7 +114,7 @@ function Shell() {
     if (e.kind === 'toast') { setToast({ id: Date.now(), text: e.text }); if (e.coins) sfx.coins(); }
     if (e.kind === 'league') setLeagueOpen(true);
     if (e.kind === 'missions') setMissionsOpen(true);
-    if (e.kind === 'go') { setTab(e.to); if (e.poolId) setOpenPool({ id: e.poolId, n: Date.now() }); }
+    if (e.kind === 'go') { setTab(e.to); if (e.poolId) setOpenPool({ id: e.poolId, n: Date.now() }); if (e.crewId) setOpenCrew({ id: e.crewId, n: Date.now() }); }
     if (e.kind === 'reload') {
       // switched accounts: start over with the new account's data
       if (Platform.OS === 'web') { try { (globalThis as { location?: Location }).location?.reload(); return; } catch { /* fall through */ } }
@@ -325,7 +326,7 @@ function Shell() {
     <View style={[styles.root, wide && styles.wideRoot]}>
     <View style={[{ flex: 1 }, wide && styles.wideCol]}>
       <View style={{ flex: 1 }}>
-        {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} openPool={openPool} onBalance={async () => setBalance(await api.getBalance())} />}
+        {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} openPool={openPool} openCrew={openCrew} onBalance={async () => setBalance(await api.getBalance())} />}
         {tab === 'create' && <CreatorScreen renderBar={renderBar} onBalance={setBalance} />}
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} onDeleted={accountDeleted} />}

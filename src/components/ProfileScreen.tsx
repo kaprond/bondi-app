@@ -11,6 +11,9 @@ import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLi
 import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
 import { useMyTitles } from '../titles';
+import { rivalryMood, useRivals } from '../rivals';
+import { poolsSnapshot } from './PoolsScreen';
+import { nameOf } from '../social';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { AccountCard } from './AccountCard';
@@ -19,7 +22,8 @@ import { blockedList, deleteAccount, refreshBlocks, unblockUser, useBlocks } fro
 interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void; onDeleted: () => void }
 
 export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, onDeleted }: Props) {
-  const myTitles = useMyTitles();
+  const myTitles = useMyTitles(poolsSnapshot);
+  const rivals = useRivals(poolsSnapshot).slice(0, 3);
   useSocial();
   useBlocks();
   useEffect(() => { refreshBlocks(); }, []);
@@ -84,6 +88,21 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
         </View>
 
         <LeagueCard onPress={openLeague} />
+
+        {rivals.length > 0 && (
+          <View style={styles.card}>
+            <Eyebrow label="⚔️ rivalries" />
+            {rivals.map((r) => (
+              <View key={r.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Avatar id={r.userId} size={34} />
+                <View style={{ flex: 1 }}>
+                  <T weight="bold" color={colors.deep}>you {r.me} – {r.them} {nameOf(r.userId)}</T>
+                  <T size={13} color={colors.muted}>{rivalryMood(r)}</T>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.card}>
           <Eyebrow label="your titles this week" />

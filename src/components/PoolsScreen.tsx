@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { wallet } from '../api';
 import { onHydrate, save } from '../persist';
@@ -11,12 +11,16 @@ import { createLivePoolsStore, createPoolsStore, isClosed, LIVE, ME, nameOf, Poo
 import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, useSocial } from '../social';
 import { REACTIONS, useThread } from '../thread';
 import { Period, useStandings } from '../standings';
+import { DeadlineKey, deadlineFor, QUICK, QuickTemplate } from '../templates';
 import { useCrewTitles } from '../titles';
+import { FeedItem, useCrewFeed } from '../feed';
 import { track } from '../track';
 import { toast } from '../bus';
 import { shareText } from '../share';
 import { colors, fonts, radius, shadow } from '../theme';
-import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
+import { Chip, Coin, Eyebrow, FadeIn, H, PillButton, SkeletonRows, T } from './ui';
+import { haptic } from '../haptics';
+import { sfx } from '../sfx';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { ReportSheet } from './ReportSheet';
@@ -26,30 +30,26 @@ import { syncWidget } from '../widget';
 import { pickAndAttachProof, useProof } from '../proof';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
+/** Read-only snapshot for other screens (demo rivalries/titles). */
+export const poolsSnapshot = () => store.list();
 onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
 const STAKES = [1, 2, 5, 10];
 /** Re-sync pools from the server (after switching accounts). */
 export const refreshPools = () => { if ('refresh' in store) (store as { refresh: () => Promise<void> }).refresh(); };
 /** How many pools you're in or made (for the add-to-home-screen nudge). */
 export const poolCount = () => store.list().length;
-type Draft = Challenge & { crew: string };
+type Draft = Challenge & { crew: string; deadline?: DeadlineKey };
 /** Re-render every 30s so countdowns stay fresh. */
 function useClock() {
   const [, set] = useState(0);
   useEffect(() => { const t = setInterval(() => set((n) => n + 1), 30000); return () => clearInterval(t); }, []);
 }
 const FORFEITS = ['buys the next round 🍻', 'gets the coffees ☕', 'does the dishes 🧽', 'sings karaoke 🎤', 'cooks dinner 🍝'];
-const DEADLINES: { label: string; mins?: number }[] = [
-  { label: 'no deadline' }, { label: '1 hour', mins: 60 }, { label: 'tonight', mins: -1 }, { label: '24 hours', mins: 1440 }, { label: '3 days', mins: 4320 }, { label: '1 week', mins: 10080 },
+const DEADLINES: { label: string; key: DeadlineKey }[] = [
+  { label: 'no deadline', key: 'none' }, { label: '1 hour', key: '1h' }, { label: 'tonight', key: 'tonight' }, { label: '24 hours', key: '24h' },
+  { label: 'this weekend', key: 'weekend' }, { label: '3 days', key: '3d' }, { label: '1 week', key: '1w' },
 ];
-/** 'tonight' = 23:00 today, or 23:00 tomorrow if that's less than an hour away. */
-function deadlineAt(mins?: number): string | undefined {
-  if (mins === undefined) return undefined;
-  if (mins > 0) return new Date(Date.now() + mins * 60000).toISOString();
-  const d = new Date(); d.setHours(23, 0, 0, 0);
-  if (d.getTime() - Date.now() < 3600000) d.setDate(d.getDate() + 1);
-  return d.toISOString();
-}
+const deadlineIndex = (k: DeadlineKey) => Math.max(0, DEADLINES.findIndex((d) => d.key === k));
 async function shareCrew(c: Crew) {
   const r = await shareText(`${c.emoji} join ${c.name} on LetsJam. we call stuff, put free coins on it, winner gets bragging rights:`, crewInviteLink(c.id));
   if (r !== 'dismissed') track('invite_shared', { what: 'crew' });
@@ -59,7 +59,7 @@ async function shareCrew(c: Crew) {
 type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string; fresh?: boolean } | { kind: 'crew'; id: string };
 
 /** `intent` asks the screen to open "create" with a challenge about one friend (from their profile). */
-export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number }; openPool?: { id: string; n: number } }) {
+export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number }; openPool?: { id: string; n: number }; openCrew?: { id: string; n: number } }) {
   useSocial();
   const [, setTick] = useState(0);
   const [view, setView] = useState<View_>({ kind: 'list' });
@@ -83,19 +83,20 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
 
   // Opened from a push notification or a shared pool link
   useEffect(() => { if (openPool?.id) setView({ kind: 'detail', id: openPool.id }); }, [openPool?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openCrew?.id) setView({ kind: 'crew', id: openCrew.id }); }, [openCrew?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (view.kind === 'create') return <CreatePool renderBar={renderBar} draft={view.draft} onDone={(id) => { refresh(); setView(id ? { kind: 'detail', id, fresh: true } : { kind: 'list' }); }} />;
+  if (view.kind === 'create') return <FadeIn key="create"><CreatePool renderBar={renderBar} draft={view.draft} onDone={(id) => { refresh(); setView(id ? { kind: 'detail', id, fresh: true } : { kind: 'list' }); }} /></FadeIn>;
   if (view.kind === 'detail') {
     const id = 'resolveId' in store ? store.resolveId(view.id) : view.id;
     const p = pools.find((x) => x.id === id);
     if (!p) { setTimeout(() => setView({ kind: 'list' })); return null; }
-    return <PoolDetail renderBar={renderBar} pool={p} fresh={view.fresh} onBack={() => setView({ kind: 'list' })} refresh={refresh} />;
+    return <FadeIn key={`d-${view.id}`}><PoolDetail renderBar={renderBar} pool={p} fresh={view.fresh} onBack={() => setView({ kind: 'list' })} refresh={refresh} /></FadeIn>;
   }
   if (view.kind === 'crew') {
     const c = crewList().find((x) => x.id === view.id);
     if (!c) { setTimeout(() => setView({ kind: 'list' })); return null; }
-    return <CrewView renderBar={renderBar} crew={c} pools={store.list().filter((p) => (p.groupId ? p.groupId === c.id : p.groupName === c.name))}
-      onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'detail', id })} onNew={() => setView({ kind: 'create', draft: { key: '', category: '', emoji: '', question: '', mode: 'yesno', outcomes: [], memberIds: [], stake: 2, crew: c.name } })} />;
+    return <FadeIn key={`c-${c.id}`}><CrewView renderBar={renderBar} crew={c} pools={store.list().filter((p) => (p.groupId ? p.groupId === c.id : p.groupName === c.name))}
+      onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'detail', id })} onNew={() => setView({ kind: 'create', draft: { key: '', category: '', emoji: '', question: '', mode: 'yesno', outcomes: [], memberIds: [], stake: 2, crew: c.name } })} /></FadeIn>;
   }
 
   const settled = (p: Pool) => ['resolved', 'voided', 'rejected'].includes(p.status);
@@ -112,7 +113,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
             <Ionicons name="add" size={26} color={colors.brand} />
           </Pressable>
           {crews.map((g) => (
-            <Pressable key={g.id} style={styles.groupItem} onPress={() => setView({ kind: 'crew', id: g.id })} accessibilityRole="button" accessibilityLabel={`${g.name} standings`}>
+            <Pressable key={g.id} style={styles.groupItem} onPress={() => setView({ kind: 'crew', id: g.id })} accessibilityRole="button" accessibilityLabel={`${g.name} feed and standings`}>
               <View style={styles.groupAvatar}><T size={22}>{g.emoji}</T></View>
               <T weight="bold" size={13} color={colors.white}>{g.name} · {g.memberIds.length}</T>
             </Pressable>
@@ -136,23 +137,21 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool }: { render
           ))}
         </View>
 
-        {shown.map((p) => (
-          <Pressable key={p.id} style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.99 }] }]} onPress={() => setView({ kind: 'detail', id: p.id })}>
-            <View style={{ flex: 1, gap: 6 }}>
-              <T weight="bold" size={16} color={colors.deep}>{p.question}</T>
-              <T size={13} color={colors.muted}>{p.groupName} · {statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}{p.comments ? ` · 💬 ${p.comments}` : ''}{p.repeat || (p.round ?? 1) > 1 ? ` · 🔁 round ${p.round ?? 1}` : ''}{p.forfeit ? ` · 🎲 ${p.forfeit}` : ''}</T>
-              <View style={styles.faces}>
-                {p.entries.slice(0, 5).map((e, i) => <View key={e.userId} style={{ marginLeft: i ? -8 : 0 }}><Avatar id={e.userId} size={26} /></View>)}
-                <T size={12} weight="bold" color={colors.muted} style={{ marginLeft: p.entries.length ? 8 : 0, alignSelf: 'center' }}>{whoIn(p)}</T>
-              </View>
+        {shown.map((p) => <PoolCard key={p.id} p={p} onPress={() => setView({ kind: 'detail', id: p.id })} />)}
+        {shown.length === 0 && crews.length > 0 && (tab === 'active' ? (
+          <View style={styles.empty}>
+            <T size={34}>🦗</T>
+            <H size={22} color={colors.deep} style={{ textAlign: 'center' }}>quiet in here</H>
+            <T color={colors.muted} style={{ textAlign: 'center' }}>start one in two taps. your crew gets a push.</T>
+            <View style={[styles.wrapRow, { justifyContent: 'center' }]}>
+              {QUICK.filter((t) => t.mode !== 'members').slice(0, 4).map((t) => (
+                <Chip key={t.key} label={`${t.emoji} ${t.label}`} onPress={() => setView({ kind: 'create', draft: {
+                  key: `quick:${t.key}`, category: '', emoji: t.emoji, question: t.question, mode: t.mode, outcomes: t.outcomes ?? [],
+                  memberIds: [], stake: t.stake ?? 2, crew: crews[0].name, deadline: t.deadline } })} />
+              ))}
             </View>
-            <View style={styles.pot}>
-              <View style={styles.inline}><Coin size={14} /><H size={22} color={colors.deep}>{p.entries.length * p.stake}</H></View>
-              <T size={12} color={colors.muted}>pot</T>
-            </View>
-          </Pressable>
-        ))}
-        {shown.length === 0 && crews.length > 0 && <T color={colors.muted} style={{ textAlign: 'center', marginTop: 24 }}>nothing here yet.</T>}
+          </View>
+        ) : <T color={colors.muted} style={{ textAlign: 'center', marginTop: 24 }}>no settled pools yet. results land here.</T>)}
 
         <PillButton label="start a pool" onPress={() => setView({ kind: 'create' })} icon={<Ionicons name="add" size={18} color={colors.white} />} />
         <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>pools use free coins only. coins have no cash value.</T>
@@ -356,13 +355,13 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   const [subject, setSubject] = useState<string | undefined>(draft?.subjectId);
   const [group, setGroup] = useState(draft?.crew ?? crews[0]?.name ?? 'house');
   const [stake, setStake] = useState(draft?.stake ?? 2);
-  const [deadline, setDeadline] = useState(3); // 24 hours
+  const [deadline, setDeadline] = useState(deadlineIndex(draft?.deadline ?? '24h'));
   const [weekly, setWeekly] = useState(false);
   const [forfeit, setForfeit] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [lastKey, setLastKey] = useState(draft?.key);
   const live = question.length > 6 ? blockedTopic(question) : null;
-  const canRepeat = DEADLINES[deadline].mins !== undefined && !(mode !== 'members' && subject);
+  const canRepeat = DEADLINES[deadline].key !== 'none' && !(mode !== 'members' && subject);
   const crew = crews.find((c) => c.name === group) ?? crews[0];
   const friends = (crew?.memberIds ?? []).filter((m) => m !== ME);
 
@@ -371,6 +370,16 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
     if (mode === 'members') return picked.map((id) => ({ id, label: nameOf(id), memberId: id }));
     return custom.filter((c) => c.trim()).map((c, i) => ({ id: `c${i}`, label: c.trim() }));
   }, [mode, picked, custom]);
+
+  function applyTemplate(t: QuickTemplate) {
+    setQuestion(t.question); setMode(t.mode); setSubject(undefined); setError(null);
+    if (t.mode === 'custom') setCustom([...(t.outcomes ?? ['', ''])]);
+    if (t.mode === 'members') setPicked(friends.slice(0, t.pick ?? 2));
+    setDeadline(deadlineIndex(t.deadline));
+    if (t.stake) setStake(t.stake);
+    setLastKey(`quick:${t.key}`);
+    track('template_used', { key: t.key });
+  }
 
   function surprise() {
     try {
@@ -384,7 +393,8 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   function submit() {
     try {
       if (!question.trim()) throw new Error('write a question first.');
-      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineAt(DEADLINES[deadline].mins), repeat: canRepeat && weekly ? 'weekly' : undefined, forfeit: forfeit.trim() || undefined });
+      const p = store.create({ question: question.trim(), stake, options, subjectId: mode === 'members' ? undefined : subject, groupName: group, closesAt: deadlineFor(DEADLINES[deadline].key), repeat: canRepeat && weekly ? 'weekly' : undefined, forfeit: forfeit.trim() || undefined });
+      haptic.success();
       onDone(p.id);
     } catch (e) { setError((e as Error).message); }
   }
@@ -399,6 +409,16 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
           <T size={18}>🎲</T><T weight="bold" color={colors.white}>surprise me</T>
         </Pressable>
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+        {QUICK.filter((t) => t.mode !== 'members' || friends.length >= 2).map((t) => (
+          <Pressable key={t.key} onPress={() => { haptic.tap(); applyTemplate(t); }} accessibilityRole="button" accessibilityLabel={`template: ${t.label}`}
+            style={({ pressed }) => [styles.quick, lastKey === `quick:${t.key}` && styles.quickOn, pressed && { transform: [{ scale: 0.96 }] }]}>
+            <T size={24}>{t.emoji}</T>
+            <T weight="bold" size={13} color={lastKey === `quick:${t.key}` ? colors.white : colors.deep}>{t.label}</T>
+          </Pressable>
+        ))}
+      </ScrollView>
 
       <View style={styles.field}>
         <T weight="bold" color={colors.deep}>crew</T>
@@ -461,7 +481,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
       <View style={styles.field}>
         <T weight="bold" color={colors.deep}>closes in</T>
         <View style={styles.wrapRow}>{DEADLINES.map((d, i) => <Chip key={d.label} label={d.label} active={deadline === i} onPress={() => setDeadline(i)} />)}</View>
-        <T size={13} color={colors.muted}>{DEADLINES[deadline].mins === undefined ? 'open until you call the result.' : 'no new picks after this. we’ll nudge the crew an hour before, and you when it’s time to call it.'}</T>
+        <T size={13} color={colors.muted}>{DEADLINES[deadline].key === 'none' ? 'open until you call the result.' : 'no new picks after this. we’ll nudge the crew an hour before, and you when it’s time to call it.'}</T>
         {canRepeat && (
           <Pressable onPress={() => setWeekly((w) => !w)} style={styles.toggleRow} accessibilityRole="switch" accessibilityState={{ checked: weekly }}>
             <Ionicons name={weekly ? 'checkbox' : 'square-outline'} size={22} color={colors.brand} />
@@ -488,6 +508,134 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
       <PillButton label="create pool" onPress={submit} />
       <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>not allowed: drinking, health or injury, dating, looks, danger or crime, self-harm.</T>
     </ScrollView>
+  );
+}
+
+/** The crew timeline: chat bubbles plus pools, results, trash talk and joins as they happen. */
+function CrewFeed({ crew, pools, onOpen }: { crew: Crew; pools: Pool[]; onOpen: (id: string) => void }) {
+  const { items, post, remove } = useCrewFeed(crew.id, pools);
+  const [text, setText] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const send = () => {
+    try { post(text); setText(''); setErr(null); haptic.tap(); }
+    catch (e) { setErr((e as Error).message); haptic.warn(); }
+  };
+  const who = (id?: string) => (!id ? 'someone' : id === ME ? 'you' : nameOf(id));
+  const row = (it: FeedItem) => {
+    if (it.kind === 'message') {
+      const mineMsg = it.userId === ME;
+      return (
+        <Pressable key={it.id} onLongPress={mineMsg ? () => remove(it.id) : undefined} style={[styles.msgRow, mineMsg && { flexDirection: 'row-reverse' }]} accessibilityHint={mineMsg ? 'long-press to delete' : undefined}>
+          {!mineMsg && it.userId && <Avatar id={it.userId} size={28} />}
+          <View style={[styles.bubble, mineMsg ? styles.bubbleMine : styles.bubbleThem]}>
+            {!mineMsg && <T size={12} weight="bold" color={colors.brand}>{who(it.userId)}</T>}
+            <T color={mineMsg ? colors.white : colors.ink}>{it.body}</T>
+            <T size={10} color={mineMsg ? '#DFF6FB' : colors.muted} style={{ alignSelf: 'flex-end' }}>{ago(it.at)}</T>
+          </View>
+        </Pressable>
+      );
+    }
+    if (it.kind === 'joined') return <T key={it.id} size={12} weight="semi" color={colors.muted} style={styles.sys}>👋 {who(it.userId)} joined the crew · {ago(it.at)}</T>;
+    const card = (emoji: string, title: string, sub?: string, tone = colors.white) => (
+      <Pressable key={it.id} onPress={it.poolId ? () => onOpen(it.poolId!) : undefined} style={({ pressed }) => [styles.feedCard, { backgroundColor: tone }, pressed && { transform: [{ scale: 0.99 }] }]} accessibilityRole="button">
+        <T size={22}>{emoji}</T>
+        <View style={{ flex: 1, gap: 2 }}>
+          <T weight="bold" color={colors.deep} numberOfLines={2}>{title}</T>
+          {sub ? <T size={13} color={colors.muted} numberOfLines={2}>{sub}</T> : null}
+        </View>
+        <T size={11} color={colors.muted}>{ago(it.at)}</T>
+      </Pressable>
+    );
+    if (it.kind === 'pool') {
+      const live = pools.find((p) => p.id === it.poolId);
+      const canCall = live && live.status === 'open' && !isClosed(live) && !live.entries.some((e) => e.userId === ME);
+      return card('📣', `${who(it.userId)} started: ${it.question}`, canCall ? 'make your call 👉' : it.extra ? `🎲 wrong side ${it.extra}` : undefined, canCall ? '#FFFBD6' : colors.white);
+    }
+    if (it.kind === 'result') return card('🏁', `settled: ${it.question}`, it.extra ? `→ ${it.extra}` : undefined, '#E8F8F0');
+    return card('💬', `${who(it.userId)}: ${it.body}`, it.question ? `on “${it.question}”` : undefined);
+  };
+  return (
+    <View style={{ gap: 10 }}>
+      {items === null && <SkeletonRows rows={4} />}
+      {items && items.length === 0 && (
+        <View style={styles.empty}>
+          <T size={30}>💬</T>
+          <T weight="bold" color={colors.deep}>nothing yet. say hi, or start a pool.</T>
+        </View>
+      )}
+      {items?.map(row)}
+      <View style={styles.feedComposer}>
+        <TextInput style={styles.composerInput} value={text} onChangeText={(t) => { setText(t); setErr(null); }} placeholder={`message ${crew.name}`} placeholderTextColor={colors.muted}
+          maxLength={280} onSubmitEditing={send} returnKeyType="send" blurOnSubmit={false} />
+        <Pressable onPress={send} disabled={!text.trim()} style={[styles.feedSend, !text.trim() && { opacity: 0.4 }]} accessibilityRole="button" accessibilityLabel="send">
+          <Ionicons name="arrow-up" size={20} color={colors.white} />
+        </Pressable>
+      </View>
+      {err && <T size={13} weight="semi" color={colors.orange}>{err}</T>}
+    </View>
+  );
+}
+
+/** List card: status at a glance, your pick or a nudge to make one, who's in, the pot. */
+function PoolCard({ p, onPress }: { p: Pool; onPress: () => void }) {
+  const mine = p.entries.find((e) => e.userId === ME);
+  const left = p.closesAt ? Date.parse(p.closesAt) - Date.now() : Infinity;
+  const closed = isClosed(p);
+  const tone = p.status === 'open' && !closed
+    ? (left < 3600000 ? { bg: '#FFE6D9', fg: colors.orange, label: 'closing soon' } : { bg: '#DDF5EA', fg: colors.win, label: 'open' })
+    : p.status === 'open' ? { bg: '#FFF4CC', fg: '#8A6D00', label: 'call it' }
+    : p.status === 'proposed' ? { bg: '#E6E5FF', fg: colors.royal, label: 'voting' }
+    : p.status === 'pending_consent' ? { bg: colors.tint, fg: colors.deep, label: 'waiting' }
+    : { bg: '#EEF1F2', fg: colors.muted, label: p.status === 'resolved' ? 'settled' : statusLabel(p) };
+  const myLabel = mine ? p.options.find((o) => o.id === mine.optionId)?.label : undefined;
+  const won = p.status === 'resolved' && mine && mine.optionId === p.resolvedOptionId;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={p.question}
+      style={({ pressed }) => [styles.card, { borderLeftWidth: 5, borderLeftColor: tone.fg }, pressed && { transform: [{ scale: 0.985 }] }]}>
+      <View style={{ flex: 1, gap: 8 }}>
+        <View style={styles.cardTop}>
+          <View style={[styles.statusPill, { backgroundColor: tone.bg }]}><T size={11} weight="bold" color={tone.fg}>{tone.label.toUpperCase()}</T></View>
+          <T size={12} weight="semi" color={colors.muted} numberOfLines={1} style={{ flex: 1 }}>{p.groupName}{(p.round ?? 1) > 1 || p.repeat ? ` · 🔁 ${p.round ?? 1}` : ''}</T>
+          {p.closesAt && p.status === 'open' && !closed && <T size={12} weight="bold" color={left < 3600000 ? colors.orange : colors.muted}>⏰ {timeLeft(p.closesAt)}</T>}
+        </View>
+        <T weight="bold" size={17} color={colors.deep} numberOfLines={3}>{p.question}</T>
+        {p.forfeit && p.status !== 'resolved' && <T size={12} color={colors.muted} numberOfLines={1}>🎲 wrong side {p.forfeit}</T>}
+        <View style={styles.cardBottom}>
+          <View style={styles.faces}>
+            {p.entries.slice(0, 5).map((e, i) => <View key={e.userId} style={{ marginLeft: i ? -8 : 0 }}><Avatar id={e.userId} size={24} /></View>)}
+            <T size={12} weight="bold" color={colors.muted} style={{ marginLeft: p.entries.length ? 8 : 0, alignSelf: 'center' }}>{whoIn(p)}{p.comments ? ` · 💬 ${p.comments}` : ''}</T>
+          </View>
+          <View style={styles.inline}><Coin size={14} /><H size={20} color={colors.deep}>{p.entries.length * p.stake}</H></View>
+        </View>
+        {p.status === 'open' && !closed && !mine && <View style={styles.callIt}><T weight="bold" size={13} color={colors.deep}>make your call 👉</T></View>}
+        {myLabel && p.status !== 'resolved' && <T size={12} weight="bold" color={colors.brand}>your pick: {myLabel}</T>}
+        {won && <T size={12} weight="bold" color={colors.win}>🏆 you called it</T>}
+      </View>
+    </Pressable>
+  );
+}
+
+/** The "your call" moment: a quick stamp when you lock in a pick. */
+function YourCall({ label, pot, onDone }: { label: string; pot: number; onDone: () => void }) {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    haptic.success(); sfx.lock();
+    Animated.sequence([
+      Animated.spring(t, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }),
+      Animated.delay(900),
+      Animated.timing(t, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start(onDone);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={onDone}>
+      <Pressable style={styles.stampWrap} onPress={onDone} accessibilityRole="button" accessibilityLabel={`locked in ${label}`}>
+        <Animated.View style={[styles.stamp, { opacity: t, transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }, { rotate: '-4deg' }] }]}>
+          <T weight="bold" size={14} color={colors.deep}>LOCKED IN ✅</T>
+          <H size={40} color={colors.royal} style={{ textAlign: 'center' }}>{label}</H>
+          <View style={styles.inline}><Coin size={16} /><T weight="bold" color={colors.deep}>pot is now {pot}</T></View>
+        </Animated.View>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -549,13 +697,15 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
   const closed = isClosed(p);
   useClock();
   const saving = p.id.startsWith('tmp-');
+  const [stamp, setStamp] = useState<{ label: string; pot: number } | null>(null);
   const askToShare = LIVE && ['open', 'pending_consent'].includes(p.status) && !closed && (fresh || (p.createdBy === ME && p.entries.length <= 1));
   const iWon = p.status === 'resolved' && !!mine && mine.optionId === p.resolvedOptionId;
-  useEffect(() => { if (iWon) askForRatingAfterWin(); }, [iWon]);
+  useEffect(() => { if (iWon) { haptic.success(); askForRatingAfterWin(); } }, [iWon]);
 
   return (
     <View style={{ flex: 1 }}>
     <ScrollView style={styles.page} contentContainerStyle={styles.body}>
+      {stamp && <YourCall label={stamp.label} pot={stamp.pot} onDone={() => setStamp(null)} />}
       <View style={styles.inBar}>{renderBar('light')}</View>
       <BackBar label="pools" onBack={onBack} />
       <Eyebrow label={p.groupName + (p.subjectId ? ` · about ${nameOf(p.subjectId)}` : '') + ((p.round ?? 1) > 1 || p.repeat ? ` · 🔁 round ${p.round ?? 1}` : '')} />
@@ -601,8 +751,9 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
         const isMine = mine?.optionId === o.id;
         const isWin = winnerId === o.id && (p.status === 'resolved' || p.status === 'proposed');
         return (
-          <Pressable key={o.id} disabled={p.status !== 'open' || !!mine || closed} onPress={() => act(() => store.join(p.id, o.id))}
-            style={[styles.option, isMine && styles.optionMine, isWin && styles.optionWin]} accessibilityRole="button">
+          <Pressable key={o.id} disabled={p.status !== 'open' || !!mine || closed}
+            onPress={() => { try { setError(null); store.join(p.id, o.id); refresh(); setStamp({ label: o.label, pot: pot + p.stake }); } catch (e) { haptic.warn(); setError((e as Error).message); } }}
+            style={({ pressed }) => [styles.option, isMine && styles.optionMine, isWin && styles.optionWin, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
             <View style={styles.optionTop}>
               {o.memberId && <Avatar id={o.memberId} size={28} />}
               <T weight="bold" size={16} color={colors.deep} style={{ flex: 1 }}>{o.label}{isMine ? '  · your pick' : ''}</T>
@@ -685,7 +836,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
 /** A crew: who's on top this month, streaks, invite, start a pool here. */
 function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Crew; pools: Pool[]; renderBar: RenderBar; onBack: () => void; onOpen: (id: string) => void; onNew: () => void }) {
   const [period, setPeriod] = useState<Period>('month');
-  useEffect(() => { track('standings_viewed'); }, []);
+  const [pane, setPane] = useState<'feed' | 'table'>('feed');
+  useEffect(() => { if (pane === 'table') track('standings_viewed'); }, [pane]);
   const rows = useStandings(crew.id, crew.memberIds, pools, period);
   const titles = useCrewTitles(crew.id, pools);
   const badges = (id: string) => titles.filter((t) => t.userId === id).map((t) => t.emoji).join('');
@@ -704,6 +856,15 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Cre
         <PillButton label="new pool" onPress={onNew} icon={<Ionicons name="add" size={18} color={colors.white} />} />
       </View>
 
+      <View style={styles.segment}>
+        {(['feed', 'table'] as const).map((t) => (
+          <Pressable key={t} onPress={() => { haptic.tap(); setPane(t); }} style={[styles.segBtn, pane === t && styles.segOn]} accessibilityRole="tab" accessibilityState={{ selected: pane === t }}>
+            <T weight="bold" color={pane === t ? colors.white : colors.deep}>{t === 'feed' ? '💬 feed' : '🏆 standings'}</T>
+          </Pressable>
+        ))}
+      </View>
+
+      {pane === 'feed' ? <CrewFeed crew={crew} pools={pools} onOpen={onOpen} /> : (<>
       <Eyebrow label={period === 'month' ? `standings · ${month}` : 'standings · all time'} />
       <View style={{ flexDirection: 'row', gap: 6 }}>
         <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -712,7 +873,7 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Cre
         </View>
       </View>
       <View style={styles.board}>
-        {rows === null && <T color={colors.muted}>loading…</T>}
+        {rows === null && <SkeletonRows rows={3} />}
         {rows && rows.every((r) => r.played === 0) && <T color={colors.muted}>no settled pools {period === 'month' ? 'this month' : 'yet'}. call one and the table fills up.</T>}
         {rows?.filter((r) => r.played > 0).map((r, i) => (
           <View key={r.userId} style={[styles.boardRow, i === 0 && { backgroundColor: colors.tint }]}>
@@ -752,6 +913,7 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Cre
           <T size={13} color={colors.muted}>{statusLabel(p)}{p.closesAt && p.status === 'open' ? ` · ⏰ ${timeLeft(p.closesAt)}` : ''}</T>
         </Pressable>
       ))}
+      </>)}
     </ScrollView>
   );
 }
@@ -829,6 +991,25 @@ const styles = StyleSheet.create({
   errorBox: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: '#FDEEE7', borderRadius: 14, padding: 12 },
   potCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.brand, borderRadius: radius.card, padding: 18, ...shadow.soft },
   notice: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, gap: 2 },
+  bubbleMine: { backgroundColor: colors.brand, borderBottomRightRadius: 6 },
+  bubbleThem: { backgroundColor: colors.white, borderBottomLeftRadius: 6, ...shadow.soft },
+  sys: { textAlign: 'center', paddingVertical: 2 },
+  feedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 12, ...shadow.soft },
+  feedComposer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderRadius: 999, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, borderWidth: 1.5, borderColor: colors.line, marginTop: 4 },
+  composerInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink, paddingVertical: 8 },
+  feedSend: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
+  empty: { backgroundColor: colors.white, borderRadius: radius.card, padding: 20, gap: 8, alignItems: 'center', ...shadow.soft },
+  quickRow: { gap: 10, paddingVertical: 2, paddingRight: 8 },
+  quick: { width: 104, backgroundColor: colors.white, borderRadius: 18, padding: 12, gap: 6, ...shadow.soft },
+  quickOn: { backgroundColor: colors.brand },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  callIt: { alignSelf: 'flex-start', backgroundColor: colors.yellow, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  stampWrap: { flex: 1, backgroundColor: 'rgba(5,19,32,0.35)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  stamp: { backgroundColor: colors.yellow, borderRadius: 28, paddingHorizontal: 30, paddingVertical: 22, alignItems: 'center', gap: 6, borderWidth: 4, borderColor: colors.royal, ...shadow.button },
   titles: { gap: 8 },
   titleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 10, ...shadow.soft },
   proof: { backgroundColor: colors.cloud, borderRadius: radius.card, padding: 12, gap: 10 },
