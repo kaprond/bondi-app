@@ -11,7 +11,8 @@ import { createLivePoolsStore, createPoolsStore, isClosed, LIVE, ME, nameOf, Poo
 import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, useSocial } from '../social';
 import { REACTIONS, useThread } from '../thread';
 import { Period, useStandings } from '../standings';
-import { DeadlineKey, deadlineFor, QUICK, QuickTemplate } from '../templates';
+import { DeadlineKey, deadlineFor, MATCH, QUICK, QuickTemplate } from '../templates';
+import { useCrewNight } from '../night';
 import { useCrewTitles } from '../titles';
 import { FeedItem, useCrewFeed } from '../feed';
 import { track } from '../track';
@@ -50,7 +51,7 @@ function useClock() {
 }
 const FORFEITS = ['buys the next round 🍻', 'gets the coffees ☕', 'does the dishes 🧽', 'sings karaoke 🎤', 'cooks dinner 🍝'];
 const DEADLINES: { label: string; key: DeadlineKey }[] = [
-  { label: 'no deadline', key: 'none' }, { label: '1 hour', key: '1h' }, { label: 'tonight', key: 'tonight' }, { label: '24 hours', key: '24h' },
+  { label: 'no deadline', key: 'none' }, { label: '15 min', key: '15m' }, { label: '1 hour', key: '1h' }, { label: 'tonight', key: 'tonight' }, { label: '24 hours', key: '24h' },
   { label: 'this weekend', key: 'weekend' }, { label: '3 days', key: '3d' }, { label: '1 week', key: '1w' },
 ];
 const deadlineIndex = (k: DeadlineKey) => Math.max(0, DEADLINES.findIndex((d) => d.key === k));
@@ -615,6 +616,83 @@ function CrewFeed({ crew, pools, onOpen }: { crew: Crew; pools: Pool[]; onOpen: 
   );
 }
 
+/** Match night: start one, then fire quick pools in one tap and watch the night's scoreboard. */
+function NightPanel({ crew, pools, onOpen }: { crew: Crew; pools: Pool[]; onOpen: (id: string) => void }) {
+  const poolsKey = pools.map((p) => p.id + p.status).join();
+  const { night, start, end } = useCrewNight(crew.id, poolsKey);
+  const [starting, setStarting] = useState(false);
+  const [title, setTitle] = useState('');
+  const [hours, setHours] = useState(3);
+  const [err, setErr] = useState<string | null>(null);
+  useClock();
+  const quick = (t: QuickTemplate) => {
+    try {
+      const friends = crew.memberIds.filter((m) => m !== ME);
+      const options: PoolOption[] = t.mode === 'yesno' ? [{ id: 'y', label: 'yes' }, { id: 'n', label: 'no' }]
+        : t.mode === 'members' ? friends.slice(0, t.pick ?? 2).map((id) => ({ id, label: nameOf(id), memberId: id }))
+        : (t.outcomes ?? []).map((o, i) => ({ id: `c${i}`, label: o }));
+      const p = store.create({ question: night ? `${t.question} (${night.title})`.slice(0, 100) : t.question, stake: 2, options, groupName: crew.name, closesAt: deadlineFor(t.deadline) });
+      haptic.success(); track('night_quick_pool', { key: t.key });
+      onOpen(p.id);
+    } catch (e) { setErr((e as Error).message); haptic.warn(); }
+  };
+  if (!night) {
+    return starting ? (
+      <View style={styles.nightCard}>
+        <T weight="bold" color={colors.white}>⚽ start match night</T>
+        <T size={13} color="#DFF6FB">the crew gets a push. quick pools close in minutes, settle as soon as most of you agree, and there’s a scoreboard for the night.</T>
+        <TextInput style={styles.nightInput} value={title} onChangeText={(t) => { setTitle(t); setErr(null); }} placeholder="what are you watching? ajax – psv" placeholderTextColor="#9FC9D6" maxLength={60} autoFocus />
+        <View style={styles.wrapRow}>{[2, 3, 4].map((h) => <Chip key={h} label={`${h} hours`} active={hours === h} onPress={() => setHours(h)} />)}</View>
+        {err && <T size={13} weight="semi" color={colors.yellow}>{err}</T>}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <PillButton label="kick off ⚽" variant="white" style={{ flex: 1 }} onPress={async () => { try { await start(title, hours); setStarting(false); haptic.success(); } catch (e) { setErr((e as Error).message); } }} />
+          <PillButton label="cancel" variant="ghost" onPress={() => setStarting(false)} />
+        </View>
+      </View>
+    ) : (
+      <Pressable onPress={() => { haptic.tap(); setStarting(true); }} style={({ pressed }) => [styles.nightStart, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button" accessibilityLabel="start match night">
+        <T size={22}>⚽</T>
+        <View style={{ flex: 1 }}>
+          <T weight="bold" color={colors.deep}>watching a match together?</T>
+          <T size={13} color={colors.muted}>start match night: one-tap quick pools + a live scoreboard</T>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+      </Pressable>
+    );
+  }
+  const left = Math.max(0, Date.parse(night.endsAt) - Date.now());
+  return (
+    <View style={styles.nightCard}>
+      <View style={styles.between}>
+        <T size={12} weight="bold" color={colors.yellow}>⚽ MATCH NIGHT · {Math.floor(left / 3600000)}h {Math.floor((left % 3600000) / 60000)}m left</T>
+        <Pressable onPress={end} hitSlop={8} accessibilityRole="button"><T size={12} weight="bold" color="#9FC9D6">end</T></Pressable>
+      </View>
+      <H size={26} color={colors.white}>{night.title}</H>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        {MATCH.map((t) => (
+          <Pressable key={t.key} onPress={() => quick(t)} style={({ pressed }) => [styles.matchBtn, pressed && { transform: [{ scale: 0.96 }] }]} accessibilityRole="button" accessibilityLabel={`quick pool: ${t.label}`}>
+            <T size={20}>{t.emoji}</T>
+            <T size={12} weight="bold" color={colors.royal}>{t.label}</T>
+            <T size={10} weight="semi" color={colors.mutedFixed}>{t.deadline === '5m' ? '5 min' : '15 min'}</T>
+          </Pressable>
+        ))}
+      </ScrollView>
+      {err && <T size={13} weight="semi" color={colors.yellow}>{err}</T>}
+      <T size={12} weight="bold" color="#9FC9D6">TONIGHT’S SCOREBOARD · {night.pools} pools</T>
+      {night.board.length === 0
+        ? <T size={13} color="#DFF6FB">no settled pools yet. tap one above, call the result when it happens: it settles as soon as most of you confirm.</T>
+        : night.board.slice(0, 6).map((r, i) => (
+          <View key={r.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <T weight="bold" color={colors.white} style={{ width: 22 }}>{i === 0 ? '👑' : i + 1}</T>
+            <Avatar id={r.userId} size={26} />
+            <T weight="bold" color={colors.white} style={{ flex: 1 }}>{r.userId === ME ? 'you' : nameOf(r.userId)} <T size={12} color="#9FC9D6">{r.won}/{r.played}</T></T>
+            <T weight="bold" color={r.net >= 0 ? '#5FE3AE' : '#FFB08A'}>{r.net >= 0 ? '+' : ''}{r.net}</T>
+          </View>
+        ))}
+    </View>
+  );
+}
+
 /** List card: status at a glance, your pick or a nudge to make one, who's in, the pot. */
 function PoolCard({ p, onPress }: { p: Pool; onPress: () => void }) {
   const mine = p.entries.find((e) => e.userId === ME);
@@ -807,7 +885,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
       {p.status === 'open' && p.createdBy === ME && p.entries.length > 1 && (
         <View style={[styles.notice, closed && { borderWidth: 2, borderColor: colors.sun }]}>
           <T weight="bold" color={colors.deep}>{closed ? 'time to call it 🏁 who won?' : 'did it happen? propose the result'}</T>
-          <T size={13} color={colors.muted}>everyone in the pool gets 48 hours to confirm or dispute. no majority means everyone gets their coins back.</T>
+          <T size={13} color={colors.muted}>everyone in the pool confirms or disputes. it settles as soon as most agree; no majority within 48 hours means everyone gets their coins back.</T>
           <View style={styles.wrapRow}>{p.options.map((o) => <Chip key={o.id} label={o.label} onPress={() => act(() => store.propose(p.id, o.id))} />)}</View>
           <ProofBox p={p} />
         </View>
@@ -823,7 +901,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
             </View>
           )}
           {LIVE
-            ? <T size={12} color={colors.muted}>settles automatically 48 hours after the result was proposed.</T>
+            ? <T size={12} color={colors.muted}>settles as soon as most players confirm, or 48 hours after the result was proposed.</T>
             : <PillButton label="demo: skip the 48 hours" variant="ghost" onPress={() => act(() => store.finalize(p.id))} />}
           <ProofBox p={p} />
         </View>
@@ -896,6 +974,8 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew, inviteOnOpen 
         {inviting && <InviteSheet crew={crew} onClose={() => setInviting(false)} />}
         <PillButton label="new pool" onPress={onNew} icon={<Ionicons name="add" size={18} color={colors.white} />} />
       </View>
+
+      <NightPanel crew={crew} pools={pools} onOpen={onOpen} />
 
       <View style={styles.segment}>
         {(['feed', 'table'] as const).map((t) => (
@@ -1049,6 +1129,10 @@ const styles = StyleSheet.create({
   cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   statusPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   callIt: { alignSelf: 'flex-start', backgroundColor: colors.yellow, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  nightStart: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.card, padding: 14, borderWidth: 1.5, borderColor: colors.line, borderStyle: 'dashed' },
+  nightCard: { backgroundColor: colors.royal, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
+  nightInput: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.bodySemi, fontSize: 16, color: colors.white },
+  matchBtn: { width: 92, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 10, gap: 2, alignItems: 'flex-start' },
   stampWrap: { flex: 1, backgroundColor: 'rgba(5,19,32,0.35)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   stamp: { backgroundColor: colors.yellow, borderRadius: 28, paddingHorizontal: 30, paddingVertical: 22, alignItems: 'center', gap: 6, borderWidth: 4, borderColor: colors.royal, ...shadow.button },
   titles: { gap: 8 },

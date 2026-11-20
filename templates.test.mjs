@@ -1,9 +1,9 @@
 // node templates.test.mjs  (after compiling src/ to .testbuild with tsc)
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { QUICK, deadlineFor } = require('./.testbuild/templates.js');
+const { QUICK, MATCH, deadlineFor } = require('./.testbuild/templates.js');
 const { blockedTopic } = require('./.testbuild/moderation.js');
-for (const t of QUICK) {
+for (const t of [...QUICK, ...MATCH]) {
   const hit = blockedTopic(`${t.question} ${(t.outcomes ?? []).join(' ')}`);
   if (hit) throw new Error(`template "${t.key}" hits blocked topic: ${hit}`);
   if (t.mode === 'custom' && (t.outcomes ?? []).length < 2) throw new Error(`template "${t.key}" needs 2+ outcomes`);
@@ -20,4 +20,6 @@ if (wk.getDay() !== 0 || wk.getHours() !== 20 || wk.getDate() !== 22) throw new 
 const sunLate = at(deadlineFor('weekend', at('2026-11-22T19:30:00')));
 if (sunLate.getDate() !== 29) throw new Error('sunday evening should roll to next week: ' + sunLate);
 if (deadlineFor('none') !== undefined) throw new Error('none should be undefined');
-console.log(`ok: ${QUICK.length} quick templates pass moderation, deadlines right`);
+const five = Date.parse(deadlineFor('5m', at('2026-11-20T15:00:00'))) - at('2026-11-20T15:00:00').getTime();
+if (five !== 300000) throw new Error('5m wrong: ' + five);
+console.log(`ok: ${QUICK.length + MATCH.length} quick templates pass moderation, deadlines right`);

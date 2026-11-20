@@ -12,6 +12,7 @@ import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
 import { useMyTitles } from '../titles';
 import { rivalryMood, useRivals } from '../rivals';
+import { useMyInvites } from '../invites';
 import { poolsSnapshot } from './PoolsScreen';
 import { nameOf } from '../social';
 import { RenderBar } from './TopBar';
@@ -24,6 +25,7 @@ interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; on
 export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, onDeleted }: Props) {
   const myTitles = useMyTitles(poolsSnapshot);
   const rivals = useRivals(poolsSnapshot).slice(0, 3);
+  const invites = useMyInvites();
   useSocial();
   useBlocks();
   useEffect(() => { refreshBlocks(); }, []);
@@ -149,14 +151,39 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
           ))}
         </View>
 
-        <Pressable onPress={async () => { if ((await shareText(`come play LetsJam with me. use my code ${inviteCode()} and we both get 10 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
-          <T size={30}>💌</T>
-          <View style={{ flex: 1 }}>
-            <T weight="bold" color={colors.white}>invite friends, get 10 coins each</T>
-            <T size={13} color={colors.white}>your code {inviteCode()}</T>
-          </View>
-          <Ionicons name="share-outline" size={22} color={colors.white} />
-        </Pressable>
+        <View style={styles.inviteCard}>
+          <Pressable onPress={async () => { if ((await shareText(`come play LetsJam with me. friend pools with free coins, no cash. use my code ${inviteCode()} and we both get 10 coins.`, inviteLink())) !== 'dismissed') recordShare(); }} style={styles.invite} accessibilityRole="button">
+            <T size={30}>💌</T>
+            <View style={{ flex: 1 }}>
+              <T weight="bold" color={colors.white}>invite friends: +10 each, +20 more when they play</T>
+              <T size={13} color={colors.white}>your code {inviteCode()}</T>
+            </View>
+            <Ionicons name="share-outline" size={22} color={colors.white} />
+          </Pressable>
+          {invites && (
+            <View style={{ gap: 10 }}>
+              <View style={styles.grid}>
+                {([['joined', invites.joined], ['played', invites.played], ['coins earned', invites.earned]] as const).map(([k, v]) => (
+                  <View key={k} style={styles.tile}><H size={26} color={colors.deep}>{v}</H><T weight="semi" size={12} color={colors.muted}>{k}</T></View>
+                ))}
+              </View>
+              {invites.founder && <T weight="bold" color={colors.deep}>👑 crew founder: you started a crew of 5+</T>}
+              {invites.board.length > 1 && (
+                <View style={{ gap: 6 }}>
+                  <T size={12} weight="bold" color={colors.muted}>TOP INVITERS THIS MONTH (YOU + FRIENDS)</T>
+                  {invites.board.slice(0, 5).map((r, i) => (
+                    <View key={r.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <T weight="bold" color={colors.deep} style={{ width: 22 }}>{i === 0 ? '🥇' : i + 1}</T>
+                      <Avatar id={r.userId} size={26} />
+                      <T weight="bold" color={colors.deep} style={{ flex: 1 }}>{r.userId === 'me' ? 'you' : nameOf(r.userId)}</T>
+                      <T size={13} color={colors.muted}>{r.joined} joined · {r.played} played</T>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
 
         <View style={styles.card}>
           <Eyebrow label="play it cool" />
@@ -283,6 +310,7 @@ const styles = StyleSheet.create({
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   tile: { flexBasis: '47%', flexGrow: 1, backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 2, ...shadow.soft },
+  inviteCard: { gap: 10 },
   card: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 12, ...shadow.soft },
   badges: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
   badge: { width: '33.33%', alignItems: 'center', gap: 4, paddingHorizontal: 4 },

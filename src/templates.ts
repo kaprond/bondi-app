@@ -1,7 +1,7 @@
 import type { ChallengeMode } from './challenges';
 
 /** Deadline presets the create screen understands. */
-export type DeadlineKey = 'none' | '1h' | 'tonight' | '24h' | 'weekend' | '3d' | '1w';
+export type DeadlineKey = 'none' | '5m' | '15m' | '1h' | 'tonight' | '24h' | 'weekend' | '3d' | '1w';
 
 /**
  * One-tap pool templates: the everyday pools crews actually make.
@@ -27,7 +27,7 @@ export const QUICK: QuickTemplate[] = [
 
 /** 'tonight' = 23:00 today (or tomorrow if under an hour away); 'weekend' = sunday 20:00 (next one if it's past). */
 export function deadlineFor(key: DeadlineKey, now = new Date()): string | undefined {
-  const mins: Partial<Record<DeadlineKey, number>> = { '1h': 60, '24h': 1440, '3d': 4320, '1w': 10080 };
+  const mins: Partial<Record<DeadlineKey, number>> = { '5m': 5, '15m': 15, '1h': 60, '24h': 1440, '3d': 4320, '1w': 10080 };
   if (key === 'none') return undefined;
   if (mins[key]) return new Date(now.getTime() + mins[key]! * 60000).toISOString();
   const d = new Date(now);
@@ -42,3 +42,13 @@ export function deadlineFor(key: DeadlineKey, now = new Date()): string | undefi
   if (d.getTime() - now.getTime() < 3600000) d.setDate(d.getDate() + 7);
   return d.toISOString();
 }
+
+/** Match night quick pools: one tap creates them, they close in minutes. */
+export const MATCH: QuickTemplate[] = [
+  { key: 'nextgoal', emoji: '⚽', label: 'next goal', question: 'who scores the next goal?', mode: 'custom', outcomes: ['home', 'away', 'no more goals'], deadline: '5m' },
+  { key: 'goal10', emoji: '⏱️', label: 'goal in 10 min?', question: 'goal in the next 10 minutes?', mode: 'yesno', deadline: '5m' },
+  { key: 'winner', emoji: '🏆', label: 'who wins?', question: 'who wins this one?', mode: 'custom', outcomes: ['home', 'draw', 'away'], deadline: '15m' },
+  { key: 'over25', emoji: '📈', label: 'over 2.5?', question: 'over 2.5 goals in the match?', mode: 'yesno', deadline: '15m' },
+  { key: 'card', emoji: '🟨', label: 'card before HT?', question: 'yellow card before half-time?', mode: 'yesno', deadline: '5m' },
+  { key: 'pen', emoji: '🎯', label: 'penalty?', question: 'penalty in this match?', mode: 'yesno', deadline: '15m' },
+];
