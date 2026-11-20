@@ -1,6 +1,7 @@
 // Card images, 1200×630 PNG:
 //   /api/card?id=<pool id>    result card for a settled pool (og:image on /r/<id>, the preview *is* the brag)
 //   /api/card?pool=<pool id>  live pool card: question, options with who's in, pot, deadline (og:image on /p/<id>)
+//   /api/card?crew=<crew id>  crew invite card: name, faces, open pools, who's on top (og:image on /c/<id>)
 import { ImageResponse } from '@vercel/og';
 import { readFileSync } from 'node:fs';
 
@@ -87,8 +88,45 @@ export function poolCard(p) {
       h('div', { fontSize: 56, fontWeight: 800, color: '#fff' }, 'letsjam')));
 }
 
+async function rpcCrew(id) {
+  if (!/^[0-9a-f-]{36}$/.test(id) || !SUPABASE_URL || !SUPABASE_KEY) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/crew_preview`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_group: id }),
+    });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
+export function crewCard(c, from) {
+  const faces = (c?.faces ?? []).slice(0, 6);
+  const extra = Math.max(0, (c?.members ?? 0) - faces.length);
+  const initial = (f, i) => (f.handle ? f.handle[0] : String.fromCharCode(65 + i)).toUpperCase();
+  const stats = c ? [`${c.members} in the crew`, c.open_pools ? `${c.open_pools} open ${c.open_pools === 1 ? 'pool' : 'pools'}` : null, c.top ? `@${c.top.handle} leads` : null].filter(Boolean).join(' · ') : 'friend pools, free coins, no cash';
+  return h('div', { width: 1200, height: 630, flexDirection: 'column', justifyContent: 'space-between', padding: '56px 64px', background: 'linear-gradient(135deg, #28275F 0%, #1765A9 60%, #0095B6 100%)', color: '#fff', fontFamily: 'Baloo', fontWeight: 600 },
+    h('div', { alignItems: 'center', justifyContent: 'space-between' },
+      h('div', { fontSize: 32, fontWeight: 800, color: '#FFF000', letterSpacing: 2 }, from ? `@${clip(from, 20).toUpperCase()} INVITED YOU` : 'YOU’RE INVITED'),
+      h('div', { fontSize: 28, fontWeight: 800, background: '#FFF000', color: '#28275F', padding: '6px 24px', borderRadius: 999 }, 'join the crew')),
+    h('div', { flexDirection: 'column' },
+      h('div', { fontSize: 104, fontWeight: 800, lineHeight: 1 }, c ? clip(noEmoji(c.name) || 'the crew', 20) : 'join my crew'),
+      h('div', { flexDirection: 'row', marginTop: 28, alignItems: 'center' },
+        ...faces.map((f, i) => h('div', { width: 84, height: 84, borderRadius: 42, background: f.color || '#0095B6', border: '5px solid #fff', marginLeft: i ? -18 : 0, alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 800, color: '#fff' }, initial(f, i))),
+        extra ? h('div', { marginLeft: 18, fontSize: 36, fontWeight: 800 }, `+${extra}`) : h('div', {}, ''))),
+    h('div', { alignItems: 'flex-end', justifyContent: 'space-between' },
+      h('div', { fontSize: 34, color: 'rgba(255,255,255,0.9)' }, stats),
+      h('div', { fontSize: 56, fontWeight: 800, color: '#fff' }, 'letsjam')));
+}
+
 export async function GET(req) {
   const q = new URL(req.url, 'https://x').searchParams;
+  const crewId = (q.get('crew') || '').toLowerCase();
+  if (crewId) {
+    const c = await rpcCrew(crewId);
+    const from = (q.get('from') || '').toLowerCase().replace(/[^a-z0-9._]/g, '');
+    return new ImageResponse(crewCard(c, from), { width: 1200, height: 630, fonts: FONTS, headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' } });
+  }
   const poolId = (q.get('pool') || '').toLowerCase();
   if (poolId) {
     const p = await rpcPublic('pool_preview', poolId);

@@ -79,7 +79,7 @@ export function PersonSheet({ id, onClose, onPoolWith }: { id: string; onClose: 
 }
 
 const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 20, paddingBottom: 28, gap: 14, ...shadow.soft },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.card, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 20, paddingBottom: 28, gap: 14, ...shadow.soft },
   grab: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: colors.line },
   head: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   grid: { flexDirection: 'row', gap: 8 },

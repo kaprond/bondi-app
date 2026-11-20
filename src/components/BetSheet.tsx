@@ -85,14 +85,14 @@ export function BetSheet({ clip, balance, onPlace }: Props) {
 }
 
 const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 10, ...shadow.soft },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.card, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 10, ...shadow.soft },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.line },
   head: { gap: 4 },
   row: { flexDirection: 'row', gap: 10 },
   option: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 18, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.cloud },
   optionOn: { borderColor: colors.brand, backgroundColor: colors.tint },
-  optionIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  odds: { alignSelf: 'flex-start', backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 1 },
+  optionIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  odds: { alignSelf: 'flex-start', backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 1 },
   stakeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

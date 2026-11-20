@@ -37,6 +37,8 @@ import { BlobBanner } from './src/components/Blob';
 import { BarTone, TopBar } from './src/components/TopBar';
 import { Welcome } from './src/components/Welcome';
 import { WarmUp } from './src/components/WarmUp';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { setScreen } from './src/errors';
 import { track } from './src/track';
 import { recordShare, setSound, useStats } from './src/session';
 import { Toast } from './src/components/Toast';
@@ -53,6 +55,10 @@ const AGE_KEY = 'bondi.ageConfirmed';
 const INSTALL_KEY = 'bondi.installAsked';
 
 export default function App() {
+  return <ErrorBoundary><AppInner /></ErrorBoundary>;
+}
+
+function AppInner() {
   const [loaded] = useFonts({ Baloo2_600SemiBold, Baloo2_700Bold, Baloo2_800ExtraBold, Quicksand_500Medium, Quicksand_600SemiBold, Quicksand_700Bold });
   const [saveLoaded, setSaveLoaded] = useState(false);
   useEffect(() => { loadSave().finally(() => setSaveLoaded(true)); }, []);
@@ -87,6 +93,7 @@ function Shell() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [height, setHeight] = useState(0);
   const [tab, setTab] = useState<Tab>(CLIPS_LIVE ? 'feed' : 'pools');
+  useEffect(() => { setScreen(tab); }, [tab]);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
   const listRef = useRef<FlatList<FeedClip>>(null);
@@ -376,7 +383,7 @@ function Shell() {
           return (
             <Pressable key={key} onPress={() => { setTab(key); if (key !== 'pools') setPoolIntent(undefined); }} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={soon ? 'clips, coming soon' : undefined}>
               {dot > 0 && <View style={styles.dot}><T size={10} weight="bold" color={colors.white}>{dot}</T></View>}
-              {soon && <View style={styles.soon}><T size={9} weight="bold" color={colors.deep}>soon</T></View>}
+              {soon && <View style={styles.soon}><T size={9} weight="bold" color={colors.deepFixed}>soon</T></View>}
               <Ionicons name={(on ? icon : `${icon}-outline`) as keyof typeof Ionicons.glyphMap} size={24} color={on ? colors.brand : colors.muted} />
               <T weight="bold" size={12} color={on ? colors.brand : colors.muted}>{label}</T>
             </Pressable>
@@ -394,7 +401,7 @@ function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPo
       <T size={44}>🛵</T>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>you called them all</H>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips land as players post them. until then, pull your friends in. you both get 10 coins.</T>
-      <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +10 each</T></Pressable>
+      <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deepFixed}>invite friends · +10 each</T></Pressable>
       <Pressable onPress={onPools} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>start a friend pool</T></Pressable>
       <Pressable onPress={onCreate} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>post your own clip · earn coins</T></Pressable>
     </View>
@@ -405,11 +412,11 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
   return (
     <View style={[styles.end, { flex: 1, paddingTop: topInset + 72, backgroundColor: colors.royal }]}>
       <BlobBanner />
-      <View style={styles.soonPill}><T size={13} weight="bold" color={colors.deep}>coming soon</T></View>
+      <View style={styles.soonPill}><T size={13} weight="bold" color={colors.deepFixed}>coming soon</T></View>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>guess what happens next</H>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>short clips that pause right before the moment. call it with free coins. dropping soon.</T>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>for now: start a pool with your friends.</T>
-      <Pressable onPress={onPools} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>start a friend pool</T></Pressable>
+      <Pressable onPress={onPools} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deepFixed}>start a friend pool</T></Pressable>
       <Pressable onPress={onInvite} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>invite friends · +10 each</T></Pressable>
     </View>
   );
@@ -431,11 +438,11 @@ const styles = StyleSheet.create({
   wideRoot: { backgroundColor: colors.royal, alignItems: 'center' },
   wideCol: { width: '100%', maxWidth: 680, backgroundColor: colors.cloud },
   header: { position: 'absolute', top: 0, left: 0, right: 0 },
-  tabs: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
+  tabs: { flexDirection: 'row', backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 2 },
   dot: { position: 'absolute', top: -4, left: '56%', zIndex: 1, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
   soon: { position: 'absolute', top: -6, left: '54%', zIndex: 1, backgroundColor: colors.yellow, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
   soonPill: { backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 },
   end: { backgroundColor: colors.sky, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
-  endBtn: { backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
+  endBtn: { backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
 });

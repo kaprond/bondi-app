@@ -7,7 +7,7 @@ import { ME, toLocal } from './social';
 import { track } from './track';
 
 /** One crew's timeline: chat, new pools, results, trash talk, joins (0021_feed_rivals.sql: crew_feed). */
-export type FeedKind = 'message' | 'pool' | 'result' | 'comment' | 'joined';
+export type FeedKind = 'message' | 'pool' | 'result' | 'comment' | 'joined' | 'poll';
 export interface FeedItem { id: string; kind: FeedKind; at: string; userId?: string; body?: string; poolId?: string; question?: string; extra?: string }
 
 type ServerItem = { id: string; kind: FeedKind; at: string; user?: string | null; body?: string | null; pool?: string | null; question?: string | null; extra?: string | null };

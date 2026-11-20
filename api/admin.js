@@ -59,6 +59,15 @@ module.exports = async (req, res) => {
     } catch { /* fall through */ }
   }
   if (!data) { res.statusCode = 404; return res.end(page('<h1>not found</h1>', 'not found')); }
+  let errors = [];
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/error_report`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_key: key, p_days: Math.min(days, 90) }),
+    });
+    if (r.ok) errors = await r.json();
+  } catch { /* errors section stays empty */ }
 
   const s = data.steps || {};
   const top = Math.max(s.visited || 0, 1);
@@ -94,6 +103,8 @@ module.exports = async (req, res) => {
     <h2>Platforms (saw welcome)</h2><div class="chips">${chips(data.platforms)}</div>
     <h2>Push nudges sent, last 7 days</h2><div class="chips">${chips(data.nudges)}</div>
     <h2>Push opened, last 7 days</h2><div class="chips">${chips(data.push_opened)}</div>
+    <h2>App errors (${errors.length ? errors.reduce((a, e) => a + Number(e.n), 0) : 0})</h2>
+    <div class="card">${errors.length ? errors.map((e) => `<details style="padding:8px 0;border-bottom:1px solid var(--line)"><summary><b>${esc(e.n)}×</b> ${esc(e.message)} <span class="sub">· ${esc(e.users)} users · ${esc(e.platforms)} · ${esc(e.versions)} · last ${esc(String(e.last_seen).slice(0, 16).replace('T', ' '))}</span></summary><pre style="white-space:pre-wrap;font-size:12px;color:#444">${esc(JSON.stringify(e.context))}\n${esc(e.stack || '')}</pre></details>`).join('') : '<span class="sub">no errors 🎉</span>'}</div>
     <h2>Per day</h2><div class="card"><table><thead><tr><th>day</th><th>sessions</th><th>passed welcome</th><th>played</th></tr></thead><tbody>${daysRows}</tbody></table></div>
     <p class="sub" style="margin-top:24px">“welcome screen” tracking starts with this release, so older sessions show 0 there. open pools now: ${t.open_pools || 0} · people with push: ${t.push_users || 0}</p>
   `));

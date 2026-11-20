@@ -90,7 +90,7 @@ export function WarmUp({ topInset, bottomInset, onDone }: { topInset: number; bo
 
         <View style={styles.coinWrap}>
           <Animated.View style={[styles.coin, { transform: [{ rotateY: turns }] }]}>
-            <H size={34} color={colors.deep}>{result ? (result === 'heads' ? 'H' : 'T') : '?'}</H>
+            <H size={34} color={colors.deepFixed}>{result ? (result === 'heads' ? 'H' : 'T') : '?'}</H>
           </Animated.View>
         </View>
 
@@ -123,7 +123,7 @@ export function WarmUp({ topInset, bottomInset, onDone }: { topInset: number; bo
 const styles = StyleSheet.create({
   body: { flexGrow: 1, paddingHorizontal: 22, gap: 16 },
   between: { flexDirection: 'row', justifyContent: 'space-between' },
-  card: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 10 },
+  card: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 10 },
   potRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   face: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

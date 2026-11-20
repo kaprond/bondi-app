@@ -99,7 +99,7 @@ export function FadeIn({ children, style }: { children: ReactNode; style?: Style
 export function Eyebrow({ label, tone = 'brand' }: { label: string; tone?: 'brand' | 'white' }) {
   return (
     <View style={[styles.eyebrow, tone === 'white' && { backgroundColor: colors.white }]}>
-      <Text style={[styles.eyebrowText, tone === 'white' && { color: colors.deep }]}>{label}</Text>
+      <Text style={[styles.eyebrowText, tone === 'white' && { color: colors.deepFixed }]}>{label}</Text>
     </View>
   );
 }
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   gloss: { position: 'absolute', top: 0, left: 10, right: 10, height: '48%', borderBottomLeftRadius: 40, borderBottomRightRadius: 40, backgroundColor: 'rgba(255,255,255,0.18)' },
   pillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pillText: { fontFamily: fonts.bodyBold, fontSize: 17 },
-  chip: { flexGrow: 1, paddingVertical: 10, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center' },
+  chip: { flexGrow: 1, paddingVertical: 10, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center' },
   chipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
   chipText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.deep },
   eyebrow: { alignSelf: 'flex-start', backgroundColor: colors.brandSoft, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 4 },

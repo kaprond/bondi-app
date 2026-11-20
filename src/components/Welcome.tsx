@@ -26,8 +26,8 @@ export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAcce
         <View style={styles.invite}>
           <T size={22}>🎉</T>
           <View style={{ flex: 1 }}>
-            <T weight="bold" color={colors.deep}>@{invitedBy} invited you</T>
-            <T size={13} weight="semi" color={colors.deep}>join now and you both get +10 coins</T>
+            <T weight="bold" color={colors.deepFixed}>@{invitedBy} invited you</T>
+            <T size={13} weight="semi" color={colors.deepFixed}>join now and you both get +10 coins</T>
           </View>
         </View>
       )}
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   wrap: { flexGrow: 1, paddingHorizontal: 22, gap: 18, justifyContent: 'space-between' },
   hero: { alignSelf: 'center', borderRadius: 36 },
   invite: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.yellow, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 12 },
-  steps: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 14 },
+  steps: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 14 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
 });

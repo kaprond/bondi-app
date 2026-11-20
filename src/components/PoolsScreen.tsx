@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Image, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { wallet } from '../api';
 import { onHydrate, save } from '../persist';
@@ -17,9 +17,13 @@ import { FeedItem, useCrewFeed } from '../feed';
 import { track } from '../track';
 import { toast } from '../bus';
 import { shareText } from '../share';
-import { colors, fonts, radius, shadow } from '../theme';
+import { colors, fonts, isDark, radius, shadow } from '../theme';
 import { Chip, Coin, Eyebrow, FadeIn, H, PillButton, SkeletonRows, T } from './ui';
 import { haptic } from '../haptics';
+import { CREW_EMOJI, InviteSheet, NewCrewSheet, shareCrew } from './CrewSheets';
+import { CreatePoll, PollCard } from './Polls';
+import { pollClosed, refreshPolls, usePolls } from '../polls';
+import { refreshSocial } from '../social';
 import { sfx } from '../sfx';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
@@ -50,23 +54,25 @@ const DEADLINES: { label: string; key: DeadlineKey }[] = [
   { label: 'this weekend', key: 'weekend' }, { label: '3 days', key: '3d' }, { label: '1 week', key: '1w' },
 ];
 const deadlineIndex = (k: DeadlineKey) => Math.max(0, DEADLINES.findIndex((d) => d.key === k));
-async function shareCrew(c: Crew) {
-  const r = await shareText(`${c.emoji} join ${c.name} on LetsJam. we call stuff, put free coins on it, winner gets bragging rights:`, crewInviteLink(c.id));
-  if (r !== 'dismissed') track('invite_shared', { what: 'crew' });
-  return r !== 'dismissed';
-}
 
-type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string; fresh?: boolean } | { kind: 'crew'; id: string };
+type View_ = { kind: 'list' } | { kind: 'create'; draft?: Draft } | { kind: 'detail'; id: string; fresh?: boolean } | { kind: 'crew'; id: string; invite?: boolean };
 
 /** `intent` asks the screen to open "create" with a challenge about one friend (from their profile). */
 export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }: { renderBar: RenderBar; onBalance: () => void; intent?: { friendId: string; n: number }; openPool?: { id: string; n: number }; openCrew?: { id: string; n: number } }) {
   useSocial();
   const [, setTick] = useState(0);
   const [view, setView] = useState<View_>({ kind: 'list' });
+  const [newCrew, setNewCrew] = useState(false);
   const [tab, setTab] = useState<'active' | 'done'>('active');
   const refresh = () => { setTick((t) => t + 1); onBalance(); };
+  const [pulling, setPulling] = useState(false);
+  const pullRefresh = async () => {
+    setPulling(true); haptic.tap();
+    try { refreshPools(); await Promise.all([refreshPolls(), refreshSocial().catch(() => {})]); refresh(); } finally { setTimeout(() => setPulling(false), 400); }
+  };
   useClock();
   const pools = store.list();
+  const polls = usePolls();
   useEffect(() => { syncWidget(pools); });
   const crews = crewList();
   // Live: re-render and re-read the balance whenever the server sync lands.
@@ -95,14 +101,16 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }
   if (view.kind === 'crew') {
     const c = crewList().find((x) => x.id === view.id);
     if (!c) { setTimeout(() => setView({ kind: 'list' })); return null; }
-    return <FadeIn key={`c-${c.id}`}><CrewView renderBar={renderBar} crew={c} pools={store.list().filter((p) => (p.groupId ? p.groupId === c.id : p.groupName === c.name))}
+    return <FadeIn key={`c-${c.id}`}><CrewView renderBar={renderBar} crew={c} inviteOnOpen={view.invite} pools={store.list().filter((p) => (p.groupId ? p.groupId === c.id : p.groupName === c.name))}
       onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'detail', id })} onNew={() => setView({ kind: 'create', draft: { key: '', category: '', emoji: '', question: '', mode: 'yesno', outcomes: [], memberIds: [], stake: 2, crew: c.name } })} /></FadeIn>;
   }
 
   const settled = (p: Pool) => ['resolved', 'voided', 'rejected'].includes(p.status);
   const shown = pools.filter((p) => (tab === 'active' ? !settled(p) : settled(p)));
+  const shownPolls = polls.filter((p) => (tab === 'active' ? !pollClosed(p) : pollClosed(p)));
   return (
-    <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 32 }}>
+    <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 32 }}
+      refreshControl={<RefreshControl refreshing={pulling} onRefresh={pullRefresh} tintColor={colors.white} colors={[colors.brand]} />}>
       <BlobHeader>{renderBar('media')}
 <View style={styles.band}>
         <Eyebrow label="season 2: friends" tone="white" />
@@ -118,6 +126,12 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }
               <T weight="bold" size={13} color={colors.white}>{g.name} · {g.memberIds.length}</T>
             </Pressable>
           ))}
+          {crews.length > 0 && (
+            <Pressable style={styles.groupItem} onPress={() => setNewCrew(true)} accessibilityRole="button" accessibilityLabel="new crew">
+              <View style={[styles.groupAvatar, { borderStyle: 'dashed' }]}><Ionicons name="people" size={22} color={colors.white} /></View>
+              <T weight="bold" size={13} color={colors.white}>+ crew</T>
+            </Pressable>
+          )}
         </ScrollView>
       </View></BlobHeader>
 
@@ -132,13 +146,14 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }
         <View style={styles.segment}>
           {(['active', 'done'] as const).map((t) => (
             <Pressable key={t} onPress={() => setTab(t)} style={[styles.segBtn, tab === t && styles.segOn]} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
-              <T weight="bold" color={tab === t ? colors.white : colors.deep}>{t === 'active' ? `active (${pools.filter((p) => !settled(p)).length})` : 'settled'}</T>
+              <T weight="bold" color={tab === t ? colors.white : colors.deep}>{t === 'active' ? `active (${pools.filter((p) => !settled(p)).length + polls.filter((p) => !pollClosed(p)).length})` : 'settled'}</T>
             </Pressable>
           ))}
         </View>
 
+        {shownPolls.map((p) => <PollCard key={p.id} p={p} />)}
         {shown.map((p) => <PoolCard key={p.id} p={p} onPress={() => setView({ kind: 'detail', id: p.id })} />)}
-        {shown.length === 0 && crews.length > 0 && (tab === 'active' ? (
+        {shown.length === 0 && shownPolls.length === 0 && crews.length > 0 && (tab === 'active' ? (
           <View style={styles.empty}>
             <T size={34}>🦗</T>
             <H size={22} color={colors.deep} style={{ textAlign: 'center' }}>quiet in here</H>
@@ -154,6 +169,7 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }
         ) : <T color={colors.muted} style={{ textAlign: 'center', marginTop: 24 }}>no settled pools yet. results land here.</T>)}
 
         <PillButton label="start a pool" onPress={() => setView({ kind: 'create' })} icon={<Ionicons name="add" size={18} color={colors.white} />} />
+        {newCrew && <NewCrewSheet onClose={() => setNewCrew(false)} onMade={(c) => { setNewCrew(false); setView({ kind: 'crew', id: c.id, invite: true }); }} />}
         <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>pools use free coins only. coins have no cash value.</T>
       </View>
     </ScrollView>
@@ -161,7 +177,6 @@ export function PoolsScreen({ renderBar, onBalance, intent, openPool, openCrew }
 }
 
 const FIRST_RUN_KEY = 'letsjam.firstRun';
-const CREW_EMOJI = ['🎉', '🏠', '⚽', '🎓', '🍻', '🏄', '🔥', '💼'];
 
 function Step({ n, done, title, children }: { n: number; done: boolean; title: string; children?: ReactNode }) {
   return (
@@ -187,6 +202,7 @@ function FirstRun({ crews, poolCount, onFirstPool }: { crews: Crew[]; poolCount:
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState(CREW_EMOJI[0]);
   const [busy, setBusy] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { AsyncStorage.getItem(FIRST_RUN_KEY).then((v) => setState(v ? JSON.parse(v) : {})).catch(() => setState({})); }, []);
   const remember = (patch: { shared?: boolean; hidden?: boolean }) => setState((s) => {
@@ -228,7 +244,8 @@ function FirstRun({ crews, poolCount, onFirstPool }: { crews: Crew[]; poolCount:
       </Step>
       <Step n={2} done={step2} title="get your people in">
         <T size={13} color={colors.muted}>whoever taps your link lands straight in {crew?.name ?? 'your crew'}. you’re friends automatically.</T>
-        {crew && <PillButton label="share the link" variant="ghost" onPress={async () => { if (await shareCrew(crew)) remember({ shared: true }); }} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />} />}
+        {crew && <PillButton label="invite people" variant="ghost" onPress={() => setInviting(true)} icon={<Ionicons name="person-add" size={18} color={colors.brand} />} />}
+        {crew && inviting && <InviteSheet crew={crew} onClose={() => setInviting(false)} onShared={() => remember({ shared: true })} />}
       </Step>
       <Step n={3} done={step3} title="start your first pool">
         <T size={13} color={colors.muted}>we’ll suggest one. tweak it or roll the dice.</T>
@@ -360,6 +377,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   const [forfeit, setForfeit] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [lastKey, setLastKey] = useState(draft?.key);
+  const [kind, setKind] = useState<'pool' | 'poll'>('pool');
   const live = question.length > 6 ? blockedTopic(question) : null;
   const canRepeat = DEADLINES[deadline].key !== 'none' && !(mode !== 'members' && subject);
   const crew = crews.find((c) => c.name === group) ?? crews[0];
@@ -404,11 +422,21 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
       <View style={styles.inBar}>{renderBar('light')}</View>
       <BackBar label="pools" onBack={() => onDone()} />
       <View style={styles.between}>
-        <H size={34}>start a pool</H>
-        <Pressable onPress={surprise} style={styles.surprise} accessibilityRole="button" accessibilityLabel="surprise me">
-          <T size={18}>🎲</T><T weight="bold" color={colors.white}>surprise me</T>
-        </Pressable>
+        <H size={34}>{kind === 'poll' ? 'quick poll' : 'start a pool'}</H>
+        {kind === 'pool' && (
+          <Pressable onPress={surprise} style={styles.surprise} accessibilityRole="button" accessibilityLabel="surprise me">
+            <T size={18}>🎲</T><T weight="bold" color={colors.white}>surprise me</T>
+          </Pressable>
+        )}
       </View>
+      <View style={styles.segment}>
+        {(['pool', 'poll'] as const).map((k) => (
+          <Pressable key={k} onPress={() => { haptic.tap(); setKind(k); }} style={[styles.segBtn, kind === k && styles.segOn]} accessibilityRole="tab" accessibilityState={{ selected: kind === k }}>
+            <T weight="bold" color={kind === k ? colors.white : colors.deep}>{k === 'pool' ? '🎲 pool · coins' : '📊 quick poll · no coins'}</T>
+          </Pressable>
+        ))}
+      </View>
+      {kind === 'poll' ? <CreatePoll crewName={group} onDone={() => onDone()} /> : (<>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
         {QUICK.filter((t) => t.mode !== 'members' || friends.length >= 2).map((t) => (
@@ -506,6 +534,7 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
 
       {error && <View style={styles.errorBox}><Ionicons name="alert-circle" size={18} color={colors.orange} /><T weight="semi" color={colors.orange} style={{ flex: 1 }}>{error}</T></View>}
       <PillButton label="create pool" onPress={submit} />
+      </>)}
       <T size={12} color={colors.muted} style={{ textAlign: 'center' }}>not allowed: drinking, health or injury, dating, looks, danger or crime, self-harm.</T>
     </ScrollView>
   );
@@ -513,7 +542,12 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
 
 /** The crew timeline: chat bubbles plus pools, results, trash talk and joins as they happen. */
 function CrewFeed({ crew, pools, onOpen }: { crew: Crew; pools: Pool[]; onOpen: (id: string) => void }) {
-  const { items, post, remove } = useCrewFeed(crew.id, pools);
+  const { items: raw, post, remove } = useCrewFeed(crew.id, pools);
+  const polls = usePolls().filter((p) => (p.groupId ? p.groupId === crew.id : p.groupName === crew.name));
+  // demo build: polls aren't in the server feed, merge them in
+  const items = raw && !LIVE
+    ? [...raw, ...polls.map((p) => ({ id: `q${p.id}`, kind: 'poll' as const, at: p.createdAt, userId: p.createdBy, poolId: p.id, question: p.question }))].sort((a, b) => a.at.localeCompare(b.at))
+    : raw;
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const send = () => {
@@ -535,6 +569,10 @@ function CrewFeed({ crew, pools, onOpen }: { crew: Crew; pools: Pool[]; onOpen: 
         </Pressable>
       );
     }
+    if (it.kind === 'poll') {
+      const poll = polls.find((p) => p.id === it.poolId);
+      if (poll) return <PollCard key={it.id} p={poll} compact />;
+    }
     if (it.kind === 'joined') return <T key={it.id} size={12} weight="semi" color={colors.muted} style={styles.sys}>👋 {who(it.userId)} joined the crew · {ago(it.at)}</T>;
     const card = (emoji: string, title: string, sub?: string, tone = colors.white) => (
       <Pressable key={it.id} onPress={it.poolId ? () => onOpen(it.poolId!) : undefined} style={({ pressed }) => [styles.feedCard, { backgroundColor: tone }, pressed && { transform: [{ scale: 0.99 }] }]} accessibilityRole="button">
@@ -549,9 +587,10 @@ function CrewFeed({ crew, pools, onOpen }: { crew: Crew; pools: Pool[]; onOpen: 
     if (it.kind === 'pool') {
       const live = pools.find((p) => p.id === it.poolId);
       const canCall = live && live.status === 'open' && !isClosed(live) && !live.entries.some((e) => e.userId === ME);
-      return card('📣', `${who(it.userId)} started: ${it.question}`, canCall ? 'make your call 👉' : it.extra ? `🎲 wrong side ${it.extra}` : undefined, canCall ? '#FFFBD6' : colors.white);
+      return card('📣', `${who(it.userId)} started: ${it.question}`, canCall ? 'make your call 👉' : it.extra ? `🎲 wrong side ${it.extra}` : undefined, canCall ? 'rgba(255,240,0,0.14)' : colors.white);
     }
-    if (it.kind === 'result') return card('🏁', `settled: ${it.question}`, it.extra ? `→ ${it.extra}` : undefined, '#E8F8F0');
+    if (it.kind === 'poll') return card('📊', `${who(it.userId)} asks: ${it.question}`, it.extra ? `${it.extra} votes` : undefined);
+    if (it.kind === 'result') return card('🏁', `settled: ${it.question}`, it.extra ? `→ ${it.extra}` : undefined, 'rgba(20,184,122,0.12)');
     return card('💬', `${who(it.userId)}: ${it.body}`, it.question ? `on “${it.question}”` : undefined);
   };
   return (
@@ -582,11 +621,11 @@ function PoolCard({ p, onPress }: { p: Pool; onPress: () => void }) {
   const left = p.closesAt ? Date.parse(p.closesAt) - Date.now() : Infinity;
   const closed = isClosed(p);
   const tone = p.status === 'open' && !closed
-    ? (left < 3600000 ? { bg: '#FFE6D9', fg: colors.orange, label: 'closing soon' } : { bg: '#DDF5EA', fg: colors.win, label: 'open' })
-    : p.status === 'open' ? { bg: '#FFF4CC', fg: '#8A6D00', label: 'call it' }
-    : p.status === 'proposed' ? { bg: '#E6E5FF', fg: colors.royal, label: 'voting' }
+    ? (left < 3600000 ? { bg: 'rgba(225,102,50,0.16)', fg: colors.orange, label: 'closing soon' } : { bg: 'rgba(20,184,122,0.16)', fg: colors.win, label: 'open' })
+    : p.status === 'open' ? { bg: 'rgba(249,197,0,0.2)', fg: isDark ? colors.sun : '#8A6D00', label: 'call it' }
+    : p.status === 'proposed' ? { bg: 'rgba(90,88,200,0.18)', fg: isDark ? '#B9B7FF' : colors.royal, label: 'voting' }
     : p.status === 'pending_consent' ? { bg: colors.tint, fg: colors.deep, label: 'waiting' }
-    : { bg: '#EEF1F2', fg: colors.muted, label: p.status === 'resolved' ? 'settled' : statusLabel(p) };
+    : { bg: 'rgba(107,124,130,0.14)', fg: colors.muted, label: p.status === 'resolved' ? 'settled' : statusLabel(p) };
   const myLabel = mine ? p.options.find((o) => o.id === mine.optionId)?.label : undefined;
   const won = p.status === 'resolved' && mine && mine.optionId === p.resolvedOptionId;
   return (
@@ -607,7 +646,7 @@ function PoolCard({ p, onPress }: { p: Pool; onPress: () => void }) {
           </View>
           <View style={styles.inline}><Coin size={14} /><H size={20} color={colors.deep}>{p.entries.length * p.stake}</H></View>
         </View>
-        {p.status === 'open' && !closed && !mine && <View style={styles.callIt}><T weight="bold" size={13} color={colors.deep}>make your call 👉</T></View>}
+        {p.status === 'open' && !closed && !mine && <View style={styles.callIt}><T weight="bold" size={13} color={colors.deepFixed}>make your call 👉</T></View>}
         {myLabel && p.status !== 'resolved' && <T size={12} weight="bold" color={colors.brand}>your pick: {myLabel}</T>}
         {won && <T size={12} weight="bold" color={colors.win}>🏆 you called it</T>}
       </View>
@@ -630,9 +669,9 @@ function YourCall({ label, pot, onDone }: { label: string; pot: number; onDone: 
     <Modal transparent visible animationType="none" onRequestClose={onDone}>
       <Pressable style={styles.stampWrap} onPress={onDone} accessibilityRole="button" accessibilityLabel={`locked in ${label}`}>
         <Animated.View style={[styles.stamp, { opacity: t, transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }, { rotate: '-4deg' }] }]}>
-          <T weight="bold" size={14} color={colors.deep}>LOCKED IN ✅</T>
+          <T weight="bold" size={14} color={colors.deepFixed}>LOCKED IN ✅</T>
           <H size={40} color={colors.royal} style={{ textAlign: 'center' }}>{label}</H>
-          <View style={styles.inline}><Coin size={16} /><T weight="bold" color={colors.deep}>pot is now {pot}</T></View>
+          <View style={styles.inline}><Coin size={16} /><T weight="bold" color={colors.deepFixed}>pot is now {pot}</T></View>
         </Animated.View>
       </Pressable>
     </Modal>
@@ -723,8 +762,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
 
       {askToShare && (
         <View style={[styles.notice, { backgroundColor: colors.yellow }]}>
-          <T weight="bold" size={16} color={colors.deep}>{p.entries.length === 0 ? 'pool’s live 🔥 now get the crew in' : 'more people = bigger pot 👀'}</T>
-          <T color={colors.deep}>drop it in the group chat. they see the question and who’s in, one tap and they’re playing.</T>
+          <T weight="bold" size={16} color={colors.deepFixed}>{p.entries.length === 0 ? 'pool’s live 🔥 now get the crew in' : 'more people = bigger pot 👀'}</T>
+          <T color={colors.deepFixed}>drop it in the group chat. they see the question and who’s in, one tap and they’re playing.</T>
           <PillButton label={saving ? 'saving…' : 'send to the group chat'} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.white} />}
             onPress={() => { if (!saving) sharePool(p, fresh ? 'after_create' : 'detail'); }} />
         </View>
@@ -789,7 +828,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
           <ProofBox p={p} />
         </View>
       )}
-      {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}
+      {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deepFixed}>settled. winners split {pot} coins.</T></View>}
       {p.status === 'resolved' && <ProofBox p={p} />}
       {p.status === 'resolved' && p.forfeit && (() => {
         const losers = p.entries.filter((e) => e.optionId !== p.resolvedOptionId).map((e) => (e.userId === ME ? 'you' : nameOf(e.userId)));
@@ -834,7 +873,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
 }
 
 /** A crew: who's on top this month, streaks, invite, start a pool here. */
-function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Crew; pools: Pool[]; renderBar: RenderBar; onBack: () => void; onOpen: (id: string) => void; onNew: () => void }) {
+function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew, inviteOnOpen }: { crew: Crew; pools: Pool[]; renderBar: RenderBar; onBack: () => void; onOpen: (id: string) => void; onNew: () => void; inviteOnOpen?: boolean }) {
+  const [inviting, setInviting] = useState(!!inviteOnOpen);
   const [period, setPeriod] = useState<Period>('month');
   const [pane, setPane] = useState<'feed' | 'table'>('feed');
   useEffect(() => { if (pane === 'table') track('standings_viewed'); }, [pane]);
@@ -852,7 +892,8 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Cre
         <View style={{ flex: 1 }}><H size={30}>{crew.name}</H><T color={colors.muted}>{crew.memberIds.length} in the crew</T></View>
       </View>
       <View style={{ gap: 8 }}>
-        <PillButton label="invite on WhatsApp" variant="ghost" onPress={() => shareCrew(crew)} icon={<Ionicons name="logo-whatsapp" size={18} color={colors.brand} />} />
+        <PillButton label="invite people" variant="ghost" onPress={() => setInviting(true)} icon={<Ionicons name="person-add" size={18} color={colors.brand} />} />
+        {inviting && <InviteSheet crew={crew} onClose={() => setInviting(false)} />}
         <PillButton label="new pool" onPress={onNew} icon={<Ionicons name="add" size={18} color={colors.white} />} />
       </View>
 
@@ -970,39 +1011,39 @@ const styles = StyleSheet.create({
   inBar: { marginHorizontal: -18, marginTop: -18 },
   band: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 22, gap: 8 },
   groups: { gap: 14, paddingTop: 10 },
-  newGroup: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
+  newGroup: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
   groupItem: { alignItems: 'center', gap: 4 },
   groupAvatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255,255,255,0.25)', borderWidth: 2, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 18, gap: 14 },
-  segment: { flexDirection: 'row', backgroundColor: colors.white, borderRadius: radius.pill, padding: 4, ...shadow.soft },
+  segment: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.pill, padding: 4, ...shadow.soft },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: radius.pill },
   segOn: { backgroundColor: colors.brand },
-  card: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: colors.white, borderRadius: radius.card, padding: 16, ...shadow.soft },
+  card: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.card, padding: 16, ...shadow.soft },
   faces: { flexDirection: 'row', marginTop: 2 },
   pot: { alignItems: 'flex-end' },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   field: { gap: 8 },
-  input: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
+  input: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
   between: { flexDirection: 'row', justifyContent: 'space-between' },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  person: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line, borderRadius: radius.pill, paddingVertical: 5, paddingLeft: 5, paddingRight: 14 },
+  person: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line, borderRadius: radius.pill, paddingVertical: 5, paddingLeft: 5, paddingRight: 14 },
   personOn: { borderColor: colors.brand, backgroundColor: colors.tint },
   errorBox: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: '#FDEEE7', borderRadius: 14, padding: 12 },
   potCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.brand, borderRadius: radius.card, padding: 18, ...shadow.soft },
-  notice: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
+  notice: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, gap: 2 },
   bubbleMine: { backgroundColor: colors.brand, borderBottomRightRadius: 6 },
-  bubbleThem: { backgroundColor: colors.white, borderBottomLeftRadius: 6, ...shadow.soft },
+  bubbleThem: { backgroundColor: colors.card, borderBottomLeftRadius: 6, ...shadow.soft },
   sys: { textAlign: 'center', paddingVertical: 2 },
   feedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 12, ...shadow.soft },
-  feedComposer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderRadius: 999, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, borderWidth: 1.5, borderColor: colors.line, marginTop: 4 },
+  feedComposer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.card, borderRadius: 999, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, borderWidth: 1.5, borderColor: colors.line, marginTop: 4 },
   composerInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink, paddingVertical: 8 },
   feedSend: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
-  empty: { backgroundColor: colors.white, borderRadius: radius.card, padding: 20, gap: 8, alignItems: 'center', ...shadow.soft },
+  empty: { backgroundColor: colors.card, borderRadius: radius.card, padding: 20, gap: 8, alignItems: 'center', ...shadow.soft },
   quickRow: { gap: 10, paddingVertical: 2, paddingRight: 8 },
-  quick: { width: 104, backgroundColor: colors.white, borderRadius: 18, padding: 12, gap: 6, ...shadow.soft },
+  quick: { width: 104, backgroundColor: colors.card, borderRadius: 18, padding: 12, gap: 6, ...shadow.soft },
   quickOn: { backgroundColor: colors.brand },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -1011,36 +1052,36 @@ const styles = StyleSheet.create({
   stampWrap: { flex: 1, backgroundColor: 'rgba(5,19,32,0.35)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   stamp: { backgroundColor: colors.yellow, borderRadius: 28, paddingHorizontal: 30, paddingVertical: 22, alignItems: 'center', gap: 6, borderWidth: 4, borderColor: colors.royal, ...shadow.button },
   titles: { gap: 8 },
-  titleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 10, ...shadow.soft },
+  titleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 10, ...shadow.soft },
   proof: { backgroundColor: colors.cloud, borderRadius: radius.card, padding: 12, gap: 10 },
   proofImg: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.tint },
-  option: { backgroundColor: colors.white, borderRadius: 18, padding: 14, gap: 10, borderWidth: 2, borderColor: 'transparent', ...shadow.soft },
+  option: { backgroundColor: colors.card, borderRadius: 18, padding: 14, gap: 10, borderWidth: 2, borderColor: 'transparent', ...shadow.soft },
   optionMine: { borderColor: colors.brand },
   optionWin: { backgroundColor: '#FFFBC2' },
   optionTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.tint, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.brandSoft },
   challenge: { backgroundColor: colors.royal, borderRadius: radius.card, padding: 16, gap: 12, ...shadow.soft },
-  challengeBody: { backgroundColor: colors.white, borderRadius: 18, padding: 16, gap: 8, minHeight: 130 },
+  challengeBody: { backgroundColor: colors.card, borderRadius: 18, padding: 16, gap: 8, minHeight: 130 },
   challengeActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   dice: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.yellow, alignItems: 'center', justifyContent: 'center', ...shadow.button },
   miniChip: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' },
   miniChipOn: { backgroundColor: colors.white, borderColor: colors.white },
   outcome: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tint, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  firstRun: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 14, borderWidth: 2, borderColor: colors.brand, ...shadow.soft },
+  firstRun: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 14, borderWidth: 2, borderColor: colors.brand, ...shadow.soft },
   step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   stepNum: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.royal, alignItems: 'center', justifyContent: 'center' },
   emojiPick: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cloud },
   emojiOn: { backgroundColor: colors.tint, borderWidth: 2, borderColor: colors.brand },
   toggleRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 6 },
-  board: { backgroundColor: colors.white, borderRadius: radius.card, padding: 8, gap: 2, ...shadow.soft },
+  board: { backgroundColor: colors.card, borderRadius: radius.card, padding: 8, gap: 2, ...shadow.soft },
   boardRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14 },
   react: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.cloud, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'transparent' },
   reactOn: { borderColor: colors.brand, backgroundColor: colors.tint },
   comment: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   composer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
-  pushCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, padding: 14, borderWidth: 2, borderColor: colors.sun, ...shadow.soft },
+  pushCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.card, padding: 14, borderWidth: 2, borderColor: colors.sun, ...shadow.soft },
   pushOn: { backgroundColor: colors.brand, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   surprise: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.royal, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, ...shadow.button },
 });

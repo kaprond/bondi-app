@@ -29,5 +29,5 @@ export function BreakReminder({ onDone }: { onDone: () => void }) {
 
 const styles = StyleSheet.create({
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,30,38,0.75)', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 40 },
-  card: { width: '100%', maxWidth: 360, backgroundColor: colors.white, borderRadius: radius.sheet, padding: 22, gap: 12, alignItems: 'center', ...shadow.soft },
+  card: { width: '100%', maxWidth: 360, backgroundColor: colors.card, borderRadius: radius.sheet, padding: 22, gap: 12, alignItems: 'center', ...shadow.soft },
 });

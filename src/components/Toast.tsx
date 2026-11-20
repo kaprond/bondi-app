@@ -18,7 +18,7 @@ export function Toast({ id, text, top, onDone }: { id: number; text: string; top
   return (
     <Animated.View pointerEvents="none" style={[styles.toast, { top, opacity: y, transform: [{ translateY: y.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }] }]}>
       <Coin size={20} />
-      <T weight="bold" color={colors.deep}>{text}</T>
+      <T weight="bold" color={colors.deepFixed}>{text}</T>
     </Animated.View>
   );
 }
