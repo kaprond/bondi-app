@@ -36,7 +36,7 @@ export function InviteSheet({ crew, onClose, onShared }: { crew: Crew; onClose: 
   return (
     <Sheet onClose={onClose}>
       <H size={28}>get people into {crew.emoji} {crew.name}</H>
-      <T color={colors.muted}>whoever opens your link lands straight in the crew, and you’re friends automatically. you both get +10.</T>
+      <T color={colors.muted}>whoever opens your link lands straight in the crew, and you’re friends automatically. +10 each, and +20 for you when they play their first pool.</T>
       <PillButton label="send to the group chat" icon={<Ionicons name="logo-whatsapp" size={18} color={colors.white} />}
         onPress={async () => { if (await shareCrew(crew)) { onShared?.(); onClose(); } }} />
       {!qr ? (

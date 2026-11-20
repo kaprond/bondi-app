@@ -11,7 +11,7 @@ export type Event =
   | 'pool_created' | 'pool_joined' | 'pool_link_opened' | 'pool_shared' | 'comment_posted'
   | 'account_saved' | 'push_enabled' | 'first_run_skipped' | 'result_shared' | 'standings_viewed'
   | 'welcome_seen' | 'push_opened' | 'review_prompted' | 'warmup_seen' | 'warmup_played' | 'proof_added' | 'live_activity_started'
-  | 'crew_message' | 'feed_viewed' | 'template_used' | 'rematch' | 'poll_created' | 'poll_voted' | 'crew_qr_shown';
+  | 'crew_message' | 'feed_viewed' | 'template_used' | 'rematch' | 'poll_created' | 'poll_voted' | 'crew_qr_shown' | 'night_started' | 'night_quick_pool';
 
 export function track(name: Event, props: Record<string, string | number | boolean> = {}) {
   if (!LIVE) return;

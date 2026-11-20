@@ -66,7 +66,7 @@ export function createPoll(input: { crewName: string; question: string; options:
   const crew = crewList().find((c) => c.name === input.crewName) ?? crewList()[0];
   if (!crew) throw new Error('make a crew first.');
   if (crew.id.startsWith('crew-')) throw new Error('your new crew is still saving. try again in a second.');
-  const p: Poll = { id: `tmp-${Date.now()}`, groupId: crew.id, groupName: crew.name, createdBy: ME, question: q, options: opts,
+  const p: Poll = { id: LIVE ? `tmp-${Date.now()}` : `demo-${Date.now()}`, groupId: crew.id, groupName: crew.name, createdBy: ME, question: q, options: opts,
     closesAt: input.closesAt, createdAt: new Date().toISOString(), counts: opts.map(() => 0), voters: [] };
   polls = [p, ...polls]; changed();
   track('poll_created', { options: opts.length, deadline: !!input.closesAt });
