@@ -12,16 +12,15 @@ export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAcce
   const hero = Math.min(width - 44, 360, height * 0.4);
   // launch: friend pools first, clips come later
   const steps: [keyof typeof Ionicons.glyphMap, string][] = [
-    ['people', 'start a pool with your crew'],
-    ['help-circle', 'ask anything: who wins, who’s late, who caves'],
-    ['trophy', 'call it with free coins. winners split the pot'],
+    ['help-circle', 'ask anything: who’s late, who caves'],
+    ['trophy', 'right calls split the pot'],
   ];
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.royal }} contentContainerStyle={[styles.wrap, { paddingTop: topInset + 16, paddingBottom: bottomInset + 24 }]}>
       <Image source={ART_HERO} style={[styles.hero, { width: hero, height: hero }]} accessibilityLabel="letsjam" />
       <View style={{ gap: 8 }}>
         <H size={40} color={colors.white}>call it with{'\n'}your <H size={40} color={colors.yellow}>crew</H></H>
-        <T weight="semi" size={17} color={colors.white}>friend pools on anything. call it right and stack your coins.</T>
+        <T weight="semi" size={17} color={colors.white}>friend pools on anything. free coins, no cash.</T>
       </View>
       {invitedBy && (
         <View style={styles.invite}>
@@ -41,7 +40,7 @@ export function Welcome({ onAccept, topInset, bottomInset, invitedBy }: { onAcce
         ))}
       </View>
       <View style={{ gap: 12 }}>
-        <PillButton label="i’m 18 or older · let’s goooo" variant="white" onPress={onAccept} />
+        <PillButton label={invitedBy ? "i’m 18+ · let’s go" : "i’m 18+ · play a round"} variant="white" onPress={onAccept} />
         <T size={12} color={colors.white} style={{ textAlign: 'center' }}>coins are free and have no cash value. you can’t buy them or cash them out.</T>
       </View>
     </ScrollView>

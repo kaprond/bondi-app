@@ -36,6 +36,7 @@ import { H, T } from './src/components/ui';
 import { BlobBanner } from './src/components/Blob';
 import { BarTone, TopBar } from './src/components/TopBar';
 import { Welcome } from './src/components/Welcome';
+import { WarmUp } from './src/components/WarmUp';
 import { track } from './src/track';
 import { recordShare, setSound, useStats } from './src/session';
 import { Toast } from './src/components/Toast';
@@ -92,6 +93,7 @@ function Shell() {
   const stats = useStats();
   const { streak } = stats;
   const [setup, setSetup] = useState(false);
+  const [warmup, setWarmup] = useState(false);
   const [poolIntent, setPoolIntent] = useState<{ friendId: string; n: number } | undefined>();
   const [openPool, setOpenPool] = useState<{ id: string; n: number } | undefined>();
   const { width: winW } = useWindowDimensions();
@@ -270,6 +272,8 @@ function Shell() {
 
   const welcomeDone = async () => {
     setSound(true); setAgeOk(true); setSetup(true); AsyncStorage.setItem(AGE_KEY, '1').catch(() => {});
+    // first minute: play a practice pool before anything else (invited people go straight to their real pool/crew)
+    if (!invite?.pool && !invite?.crew) setWarmup(true);
     track('welcome_done', { invited: !!invite, via: invite?.crew ? 'crew' : invite?.pool ? 'pool' : invite ? 'friend' : 'none' });
     if (!invite) return;
     clearInviteFromUrl();
@@ -302,6 +306,8 @@ function Shell() {
   );
   if (ageOk === null) return <View style={{ flex: 1, backgroundColor: colors.brand }} />;
   if (!ageOk) return <Welcome topInset={insets.top} bottomInset={insets.bottom} invitedBy={invite?.from} onAccept={welcomeDone} />;
+
+  if (setup && warmup) return <WarmUp topInset={insets.top} bottomInset={insets.bottom} onDone={() => setWarmup(false)} />;
 
   if (setup) return (
     <View style={{ flex: 1 }}>

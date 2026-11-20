@@ -52,7 +52,8 @@ export function card(r) {
       h('div', { fontSize: 40, color: 'rgba(255,255,255,0.8)', marginBottom: 18 }, r ? clip(r.question, 70) : 'friend pools with free coins'),
       h('div', { fontSize: 92, fontWeight: 800, lineHeight: 1 }, r ? clip(r.winner ?? '', 28) : 'call it with your crew'),
       h('div', { fontSize: 44, fontWeight: 800, color: '#F9C500', marginTop: 20 }, r ? `${clip(who, 40)} called it` : ''),
-      r?.forfeit ? h('div', { fontSize: 32, color: '#fff', marginTop: 10 }, `wrong side ${clip(noEmoji(r.forfeit), 50)}`) : h('div', {}, '')),
+      r?.forfeit ? h('div', { fontSize: 32, color: '#fff', marginTop: 10 }, `wrong side ${clip(noEmoji(r.forfeit), 50)}`) : h('div', {}, ''),
+      r?.proof ? h('div', { fontSize: 26, color: '#F9C500', marginTop: 8 }, 'photo proof attached') : h('div', {}, '')),
     h('div', { alignItems: 'flex-end', justifyContent: 'space-between' },
       h('div', { fontSize: 32, color: 'rgba(255,255,255,0.85)' }, r ? `${r.players} played · ${r.pot} coins in the pot${each ? ` · ${each} each` : ''}` : ''),
       h('div', { fontSize: 56, fontWeight: 800, color: '#fff' }, 'letsjam')));

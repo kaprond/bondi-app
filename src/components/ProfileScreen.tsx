@@ -10,6 +10,7 @@ import { shareText } from '../share';
 import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLink, me, updateProfile, useSocial } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
+import { useMyTitles } from '../titles';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { AccountCard } from './AccountCard';
@@ -18,6 +19,7 @@ import { blockedList, deleteAccount, refreshBlocks, unblockUser, useBlocks } fro
 interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void; onDeleted: () => void }
 
 export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, onDeleted }: Props) {
+  const myTitles = useMyTitles();
   useSocial();
   useBlocks();
   useEffect(() => { refreshBlocks(); }, []);
@@ -82,6 +84,21 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
         </View>
 
         <LeagueCard onPress={openLeague} />
+
+        <View style={styles.card}>
+          <Eyebrow label="your titles this week" />
+          {myTitles.length === 0
+            ? <T size={13} color={colors.muted}>no crowns yet. call pools right (or very wrong) this week: 🔮 the oracle, 🐺 the underdog, 🤡 wrong again, 📣 ring leader, 🎲 all in.</T>
+            : myTitles.map((t, i) => (
+              <View key={t.key + (t.crew ?? '') + i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <T size={26}>{t.emoji}</T>
+                <View style={{ flex: 1 }}>
+                  <T weight="bold" color={colors.deep}>{t.title}{t.crew ? ` · ${t.crew}` : ''}</T>
+                  <T size={13} color={colors.muted}>{t.why}</T>
+                </View>
+              </View>
+            ))}
+        </View>
 
         <View style={styles.card}>
           <View style={styles.between}><Eyebrow label="badges" /><T size={13} color={colors.muted}>{got} of {badges.length}</T></View>

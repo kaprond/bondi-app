@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { wallet } from '../api';
 import { onHydrate, save } from '../persist';
@@ -11,6 +11,7 @@ import { createLivePoolsStore, createPoolsStore, isClosed, LIVE, ME, nameOf, Poo
 import { APP_URL, Crew, crewInviteLink, crewList, inviteCode, me, startCrew, useSocial } from '../social';
 import { REACTIONS, useThread } from '../thread';
 import { Period, useStandings } from '../standings';
+import { useCrewTitles } from '../titles';
 import { track } from '../track';
 import { toast } from '../bus';
 import { shareText } from '../share';
@@ -22,6 +23,7 @@ import { ReportSheet } from './ReportSheet';
 import { dismissPushOffer, enablePush, shouldOfferPush } from '../push';
 import { askForRatingAfterWin } from '../rate';
 import { syncWidget } from '../widget';
+import { pickAndAttachProof, useProof } from '../proof';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
 onHydrate((d) => { if (!LIVE && Array.isArray(d.pools)) store.restore(d.pools as Pool[]); });
@@ -489,6 +491,37 @@ function CreatePool({ onDone, renderBar, draft }: { onDone: (id?: string) => voi
   );
 }
 
+/** Photo proof: the creator attaches it, the crew sees it while voting and after. Private to the crew. */
+function ProofBox({ p }: { p: Pool }) {
+  const canAdd = p.createdBy === ME && ['open', 'locked', 'proposed'].includes(p.status) && !p.id.startsWith('tmp-');
+  const visible = ['proposed', 'resolved'].includes(p.status) || canAdd;
+  const { url, reload } = useProof(p.id, visible);
+  const [busy, setBusy] = useState(false);
+  if (!visible || (!url && !canAdd)) return null;
+  const add = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { if (await pickAndAttachProof(p.id)) { reload(); toast('proof added 📸'); } }
+    catch (e) { toast((e as Error).message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <View style={styles.proof}>
+      {url
+        ? <Image source={{ uri: url }} style={styles.proofImg} resizeMode="cover" accessibilityLabel="proof photo" />
+        : <T size={13} color={colors.muted}>add a photo so nobody can say “that didn’t happen”: the score, the receipt, the finish-line selfie.</T>}
+      <View style={styles.between}>
+        <T weight="bold" color={colors.deep}>{url ? '📸 proof' : '📸 no proof yet'}</T>
+        {canAdd && (
+          <Pressable onPress={add} hitSlop={8} accessibilityRole="button" accessibilityLabel={url ? 'replace proof photo' : 'add proof photo'}>
+            <T weight="bold" color={colors.brand}>{busy ? 'uploading…' : url ? 'replace' : 'add proof'}</T>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
 /** How many of the crew called it: "3 of 5 called it" (or "3 in" when the crew size is unknown). */
 function whoIn(p: Pool) {
   const size = crewList().find((c) => (p.groupId ? c.id === p.groupId : c.name === p.groupName))?.memberIds.length ?? 0;
@@ -586,6 +619,7 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
           <T weight="bold" color={colors.deep}>{closed ? 'time to call it 🏁 who won?' : 'did it happen? propose the result'}</T>
           <T size={13} color={colors.muted}>everyone in the pool gets 48 hours to confirm or dispute. no majority means everyone gets their coins back.</T>
           <View style={styles.wrapRow}>{p.options.map((o) => <Chip key={o.id} label={o.label} onPress={() => act(() => store.propose(p.id, o.id))} />)}</View>
+          <ProofBox p={p} />
         </View>
       )}
 
@@ -601,9 +635,11 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
           {LIVE
             ? <T size={12} color={colors.muted}>settles automatically 48 hours after the result was proposed.</T>
             : <PillButton label="demo: skip the 48 hours" variant="ghost" onPress={() => act(() => store.finalize(p.id))} />}
+          <ProofBox p={p} />
         </View>
       )}
       {p.status === 'resolved' && <View style={[styles.notice, { backgroundColor: colors.yellow }]}><T weight="bold" color={colors.deep}>settled. winners split {pot} coins.</T></View>}
+      {p.status === 'resolved' && <ProofBox p={p} />}
       {p.status === 'resolved' && p.forfeit && (() => {
         const losers = p.entries.filter((e) => e.optionId !== p.resolvedOptionId).map((e) => (e.userId === ME ? 'you' : nameOf(e.userId)));
         return losers.length > 0 ? (
@@ -651,6 +687,8 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Cre
   const [period, setPeriod] = useState<Period>('month');
   useEffect(() => { track('standings_viewed'); }, []);
   const rows = useStandings(crew.id, crew.memberIds, pools, period);
+  const titles = useCrewTitles(crew.id, pools);
+  const badges = (id: string) => titles.filter((t) => t.userId === id).map((t) => t.emoji).join('');
   const open = pools.filter((p) => p.status === 'open' || p.status === 'proposed');
   const month = new Date().toLocaleString('en', { month: 'long' }).toLowerCase();
   return (
@@ -681,13 +719,31 @@ function CrewView({ crew, pools, renderBar, onBack, onOpen, onNew }: { crew: Cre
             <T weight="bold" size={18} color={colors.deep} style={{ width: 28 }}>{i === 0 ? '👑' : i + 1}</T>
             <Avatar id={r.userId} size={34} />
             <View style={{ flex: 1 }}>
-              <T weight="bold" color={colors.deep}>{r.userId === ME ? 'you' : nameOf(r.userId)}{r.streak >= 2 ? `  🔥${r.streak}` : ''}</T>
+              <T weight="bold" color={colors.deep}>{r.userId === ME ? 'you' : nameOf(r.userId)}{badges(r.userId) ? ` ${badges(r.userId)}` : ''}{r.streak >= 2 ? `  🔥${r.streak}` : ''}</T>
               <T size={13} color={colors.muted}>called {r.won} of {r.played}</T>
             </View>
             <T weight="bold" color={r.net >= 0 ? colors.win : colors.orange}>{r.net >= 0 ? '+' : ''}{r.net}</T>
           </View>
         ))}
       </View>
+
+      <Eyebrow label="this week’s titles" />
+      {titles.length === 0
+        ? <T color={colors.muted}>no titles yet this week. settle a couple of pools and the crowns start flying 👑</T>
+        : (
+          <View style={styles.titles}>
+            {titles.map((t) => (
+              <View key={t.key} style={styles.titleCard}>
+                <T size={26}>{t.emoji}</T>
+                <View style={{ flex: 1 }}>
+                  <T weight="bold" color={colors.deep}>{t.title}</T>
+                  <T size={13} color={colors.muted}>{t.userId === ME ? 'you' : t.userId ? nameOf(t.userId) : '?'} · {t.why}</T>
+                </View>
+                {t.userId && <Avatar id={t.userId} size={30} />}
+              </View>
+            ))}
+          </View>
+        )}
 
       {open.length > 0 && <Eyebrow label="open in this crew" />}
       {open.map((p) => (
@@ -773,6 +829,10 @@ const styles = StyleSheet.create({
   errorBox: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: '#FDEEE7', borderRadius: 14, padding: 12 },
   potCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.brand, borderRadius: radius.card, padding: 18, ...shadow.soft },
   notice: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
+  titles: { gap: 8 },
+  titleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 10, ...shadow.soft },
+  proof: { backgroundColor: colors.cloud, borderRadius: radius.card, padding: 12, gap: 10 },
+  proofImg: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.tint },
   option: { backgroundColor: colors.white, borderRadius: 18, padding: 14, gap: 10, borderWidth: 2, borderColor: 'transparent', ...shadow.soft },
   optionMine: { borderColor: colors.brand },
   optionWin: { backgroundColor: '#FFFBC2' },

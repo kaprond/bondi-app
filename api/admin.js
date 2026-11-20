@@ -8,6 +8,7 @@ const STEPS = [
   ['visited', 'opened the app', 'every new (anonymous) session, bots and link previews included'],
   ['saw_welcome', 'saw the welcome screen', 'the app actually rendered for them'],
   ['said_yes', 'tapped “i’m 18+ · let’s go”', 'the age gate'],
+  ['warmed_up', 'played the warm-up round', 'heads or tails, new users only'],
   ['made_profile', 'picked a name', ''],
   ['in_crew', 'in a crew', 'made one or joined via a link'],
   ['played', 'played a pool', 'made or joined one'],
@@ -68,7 +69,7 @@ module.exports = async (req, res) => {
     const html = `<div class="step"><div>${esc(label)}${hint ? `<small>${esc(hint)}</small>` : ''}</div>
       <div class="bar"><i style="width:${Math.max((n / top) * 100, n ? 1.5 : 0)}%"></i></div>
       <div class="num"><b>${n}</b><em class="${prev !== null && ofPrev < 40 ? 'drop' : ''}">${prev === null ? '' : `${ofPrev}% of previous`}</em></div></div>`;
-    if (k !== 'push_on') prev = n; // push is app-only: don't chain the next step to it
+    if (k !== 'push_on' && k !== 'warmed_up') prev = n; // optional steps: don't chain the next step to them
     return html;
   }).join('');
 

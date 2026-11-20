@@ -1,7 +1,9 @@
-import { Spacer, Text, VStack } from '@expo/ui/swift-ui';
-import { containerBackground, font, foregroundStyle, lineLimit, widgetURL } from '@expo/ui/swift-ui/modifiers';
-import { createWidget, type WidgetEnvironment } from 'expo-widgets';
+import { HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui';
+import { activityBackgroundTint, containerBackground, font, foregroundStyle, lineLimit, monospacedDigit, widgetURL } from '@expo/ui/swift-ui/modifiers';
+import { createLiveActivity, createWidget, type LiveActivity, type WidgetEnvironment } from 'expo-widgets';
 import type { Pool } from './pools';
+import { ME } from './social';
+import { track } from './track';
 
 type Row = { q: string; crew: string; pot: number; closes?: number; id: string };
 type Props = { rows: Row[]; open: number };
@@ -43,6 +45,72 @@ const OpenPools = (props: Props, env: WidgetEnvironment) => {
 
 const widget = createWidget<Props>('OpenPools', OpenPools, { rows: [], open: 0 });
 
+type Live = { q: string; start: number; closes: number; line: string; mine: string };
+
+/** Lock screen + Dynamic Island: a pool you're in is about to close. Same rules as the widget: serialized, no outside helpers. */
+const PoolCountdown = (props: Live) => {
+  'widget';
+  const timer = { lower: new Date(props.start), upper: new Date(props.closes) };
+  return {
+    banner: (
+      <VStack alignment="leading" spacing={6} modifiers={[activityBackgroundTint('#0095B6')]}>
+        <HStack spacing={6}>
+          <Text modifiers={[font({ size: 12, weight: 'heavy', design: 'rounded' }), foregroundStyle('#FFE14D')]}>LetsJam · closing soon</Text>
+          <Spacer />
+          <Text timerInterval={timer} countsDown modifiers={[font({ size: 15, weight: 'heavy', design: 'rounded' }), monospacedDigit(), foregroundStyle('#FFFFFF')]} />
+        </HStack>
+        <Text modifiers={[font({ size: 17, weight: 'bold', design: 'rounded' }), foregroundStyle('#FFFFFF'), lineLimit(2)]}>{props.q}</Text>
+        <Text modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle('#DFF6FB'), lineLimit(1)]}>{props.mine + ' · ' + props.line}</Text>
+      </VStack>
+    ),
+    compactLeading: <Text modifiers={[font({ size: 14 })]}>🎲</Text>,
+    compactTrailing: <Text timerInterval={timer} countsDown modifiers={[font({ size: 13, weight: 'bold' }), monospacedDigit(), foregroundStyle('#FFE14D')]} />,
+    minimal: <Text modifiers={[font({ size: 13 })]}>⏰</Text>,
+    expandedLeading: <Text modifiers={[font({ size: 13, weight: 'heavy', design: 'rounded' }), foregroundStyle('#FFE14D')]}>closing</Text>,
+    expandedTrailing: <Text timerInterval={timer} countsDown modifiers={[font({ size: 15, weight: 'heavy' }), monospacedDigit(), foregroundStyle('#FFFFFF')]} />,
+    expandedBottom: (
+      <VStack alignment="leading" spacing={4}>
+        <Text modifiers={[font({ size: 16, weight: 'bold', design: 'rounded' }), foregroundStyle('#FFFFFF'), lineLimit(2)]}>{props.q}</Text>
+        <Text modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle('#DFF6FB'), lineLimit(1)]}>{props.mine + ' · ' + props.line}</Text>
+      </VStack>
+    ),
+  };
+};
+
+const countdown = createLiveActivity<Live>('PoolCountdown', PoolCountdown);
+const LIVE_WINDOW = 3 * 3600 * 1000; // show it for pools closing within 3 hours
+let current: { poolId: string; activity: LiveActivity<Live>; json: string; start: number } | null = null;
+const startedFor = new Set<string>(); // once per pool per app session: if you swipe it away, it stays away
+
+function syncLiveActivity(pools: Pool[]) {
+  const now = Date.now();
+  const mineOpen = pools
+    .filter((p) => p.status === 'open' && p.closesAt && p.entries.some((e) => e.userId === ME))
+    .map((p) => ({ p, closes: Date.parse(p.closesAt!) }))
+    .filter((x) => x.closes > now && x.closes - now <= LIVE_WINDOW)
+    .sort((a, b) => a.closes - b.closes)[0];
+
+  if (current && (!mineOpen || mineOpen.p.id !== current.poolId)) {
+    current.activity.end('immediate').catch(() => {});
+    current = null;
+  }
+  if (!mineOpen) return;
+  const { p, closes } = mineOpen;
+  const pick = p.options.find((o) => o.id === p.entries.find((e) => e.userId === ME)?.optionId)?.label ?? '';
+  const counts = p.options.map((o) => `${o.label} ${p.entries.filter((e) => e.optionId === o.id).length}`).join(' · ');
+  const props: Live = { q: p.question, start: current?.start ?? now, closes, mine: `you: ${pick}`, line: `${counts} · pot ${p.entries.length * p.stake}` };
+  const json = JSON.stringify(props);
+  if (current) {
+    if (json !== current.json) { current.json = json; current.activity.update(props, new Date(closes)).catch(() => {}); }
+    return;
+  }
+  if (startedFor.has(p.id)) return;
+  startedFor.add(p.id);
+  const activity = countdown.start(props, `letsjam://pool/${p.id}`, new Date(closes));
+  current = { poolId: p.id, activity, json, start: now };
+  track('live_activity_started');
+}
+
 let last = '';
 /** Push your open pools to the home-screen widget (only when something changed). */
 export function syncWidget(pools: Pool[]) {
@@ -55,6 +123,7 @@ export function syncWidget(pools: Pool[]) {
       open: open.length,
       rows: open.slice(0, 3).map((p) => ({ id: p.id, q: p.question, crew: p.groupName, pot: p.entries.length * p.stake, closes: p.closesAt ? Date.parse(p.closesAt) : undefined })),
     };
+    try { syncLiveActivity(pools); } catch { /* Live Activities off or unsupported */ }
     const json = JSON.stringify(props);
     if (json === last) return;
     last = json;
