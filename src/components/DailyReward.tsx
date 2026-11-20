@@ -56,7 +56,7 @@ export function DailyReward({ daily, onClaim, onLater }: { daily: Daily; onClaim
 
 const styles = StyleSheet.create({
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.scrim, alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 20 },
-  card: { width: '100%', maxWidth: 360, borderRadius: radius.sheet, overflow: 'hidden', backgroundColor: colors.white, ...shadow.soft },
+  card: { width: '100%', maxWidth: 360, borderRadius: radius.sheet, overflow: 'hidden', backgroundColor: colors.card, ...shadow.soft },
   top: { alignItems: 'center', paddingTop: 22, paddingBottom: 14, gap: 4 },
   body: { padding: 18, gap: 14 },
   days: { flexDirection: 'row', justifyContent: 'space-between' },

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, LayoutChangeEvent, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Invite, parseInvite, parseOpen } from './src/deeplink';
+import { FlatList, LayoutChangeEvent, Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +36,9 @@ import { H, T } from './src/components/ui';
 import { BlobBanner } from './src/components/Blob';
 import { BarTone, TopBar } from './src/components/TopBar';
 import { Welcome } from './src/components/Welcome';
+import { WarmUp } from './src/components/WarmUp';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { setScreen } from './src/errors';
 import { track } from './src/track';
 import { recordShare, setSound, useStats } from './src/session';
 import { Toast } from './src/components/Toast';
@@ -51,6 +55,10 @@ const AGE_KEY = 'bondi.ageConfirmed';
 const INSTALL_KEY = 'bondi.installAsked';
 
 export default function App() {
+  return <ErrorBoundary><AppInner /></ErrorBoundary>;
+}
+
+function AppInner() {
   const [loaded] = useFonts({ Baloo2_600SemiBold, Baloo2_700Bold, Baloo2_800ExtraBold, Quicksand_500Medium, Quicksand_600SemiBold, Quicksand_700Bold });
   const [saveLoaded, setSaveLoaded] = useState(false);
   useEffect(() => { loadSave().finally(() => setSaveLoaded(true)); }, []);
@@ -69,19 +77,33 @@ function Shell() {
   const [balance, setBalance] = useState(0);
   const [daily, setDaily] = useState<Daily | null>(null);
   const [showDaily, setShowDaily] = useState(false);
-  const [invite] = useState(readInvite);
+  const [invite, setInvite] = useState(readInvite);
+  // App: links (universal links / letsjam://) open straight in here, cold start or while running
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const handle = (u: string | null | undefined) => {
+      const i = parseInvite(u); if (i) { setInvite(i); return; }
+      const o = parseOpen(u); if (o) { setTab('pools'); if (o.poolId) setOpenPool({ id: o.poolId, n: Date.now() }); }
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => handle(url));
+    return () => sub.remove();
+  }, []);
   const [dare, setDare] = useState<Dare | null>(() => (CLIPS_LIVE ? readDare() : null));
   const [activeIndex, setActiveIndex] = useState(0);
   const [height, setHeight] = useState(0);
   const [tab, setTab] = useState<Tab>(CLIPS_LIVE ? 'feed' : 'pools');
+  useEffect(() => { setScreen(tab); }, [tab]);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
   const listRef = useRef<FlatList<FeedClip>>(null);
   const stats = useStats();
   const { streak } = stats;
   const [setup, setSetup] = useState(false);
+  const [warmup, setWarmup] = useState(false);
   const [poolIntent, setPoolIntent] = useState<{ friendId: string; n: number } | undefined>();
   const [openPool, setOpenPool] = useState<{ id: string; n: number } | undefined>();
+  const [openCrew, setOpenCrew] = useState<{ id: string; n: number } | undefined>();
   const { width: winW } = useWindowDimensions();
   const social = useSocial();
   const league = useLeague();
@@ -99,7 +121,7 @@ function Shell() {
     if (e.kind === 'toast') { setToast({ id: Date.now(), text: e.text }); if (e.coins) sfx.coins(); }
     if (e.kind === 'league') setLeagueOpen(true);
     if (e.kind === 'missions') setMissionsOpen(true);
-    if (e.kind === 'go') { setTab(e.to); if (e.poolId) setOpenPool({ id: e.poolId, n: Date.now() }); }
+    if (e.kind === 'go') { setTab(e.to); if (e.poolId) setOpenPool({ id: e.poolId, n: Date.now() }); if (e.crewId) setOpenCrew({ id: e.crewId, n: Date.now() }); }
     if (e.kind === 'reload') {
       // switched accounts: start over with the new account's data
       if (Platform.OS === 'web') { try { (globalThis as { location?: Location }).location?.reload(); return; } catch { /* fall through */ } }
@@ -172,10 +194,10 @@ function Shell() {
   useEffect(() => { if (ageOk) track('app_open'); }, [ageOk]);
 
   // Opened from a crew invite link: join the crew, become friends with whoever shared it.
-  const joinedCrew = useRef(false);
+  const joinedCrew = useRef<string | null>(null);
   useEffect(() => {
-    if (!invite?.crew || joinedCrew.current || ageOk !== true || setup || !LIVE) return;
-    joinedCrew.current = true;
+    if (!invite?.crew || joinedCrew.current === invite.crew || ageOk !== true || setup || !LIVE) return;
+    joinedCrew.current = invite.crew;
     track('crew_link_opened');
     rpc('join_crew_link', { p_group: invite.crew, p_code: invite.code })
       .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew. start a pool or jump into one 🔥` }); })
@@ -183,10 +205,10 @@ function Shell() {
   }, [invite, ageOk, setup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opened from a shared pool link: join that pool's crew and open the pool.
-  const joinedPool = useRef(false);
+  const joinedPool = useRef<string | null>(null);
   useEffect(() => {
-    if (!invite?.pool || joinedPool.current || ageOk !== true || setup || !LIVE) return;
-    joinedPool.current = true;
+    if (!invite?.pool || joinedPool.current === invite.pool || ageOk !== true || setup || !LIVE) return;
+    joinedPool.current = invite.pool;
     track('pool_link_opened');
     rpc('join_pool_link', { p_pool: invite.pool, p_code: invite.code })
       .then(async () => { await refreshSocial(); refreshPools(); setTab('pools'); setOpenPool({ id: invite.pool!, n: Date.now() }); setToast({ id: Date.now(), text: `you’re in @${invite.from}’s crew now. make your call` }); })
@@ -258,6 +280,8 @@ function Shell() {
 
   const welcomeDone = async () => {
     setSound(true); setAgeOk(true); setSetup(true); AsyncStorage.setItem(AGE_KEY, '1').catch(() => {});
+    // first minute: play a practice pool before anything else (invited people go straight to their real pool/crew)
+    if (!invite?.pool && !invite?.crew) setWarmup(true);
     track('welcome_done', { invited: !!invite, via: invite?.crew ? 'crew' : invite?.pool ? 'pool' : invite ? 'friend' : 'none' });
     if (!invite) return;
     clearInviteFromUrl();
@@ -291,6 +315,8 @@ function Shell() {
   if (ageOk === null) return <View style={{ flex: 1, backgroundColor: colors.brand }} />;
   if (!ageOk) return <Welcome topInset={insets.top} bottomInset={insets.bottom} invitedBy={invite?.from} onAccept={welcomeDone} />;
 
+  if (setup && warmup) return <WarmUp topInset={insets.top} bottomInset={insets.bottom} onDone={() => setWarmup(false)} />;
+
   if (setup) return (
     <View style={{ flex: 1 }}>
       <SetupProfile topInset={insets.top} onDone={() => { track('profile_done'); setSetup(false); }} />
@@ -307,7 +333,7 @@ function Shell() {
     <View style={[styles.root, wide && styles.wideRoot]}>
     <View style={[{ flex: 1 }, wide && styles.wideCol]}>
       <View style={{ flex: 1 }}>
-        {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} openPool={openPool} onBalance={async () => setBalance(await api.getBalance())} />}
+        {tab === 'pools' && <PoolsScreen renderBar={renderBar} intent={poolIntent} openPool={openPool} openCrew={openCrew} onBalance={async () => setBalance(await api.getBalance())} />}
         {tab === 'create' && <CreatorScreen renderBar={renderBar} onBalance={setBalance} />}
         {tab === 'friends' && <FriendsScreen renderBar={renderBar} onPoolWith={(friendId) => { setPoolIntent({ friendId, n: Date.now() }); setTab('pools'); }} />}
         {tab === 'me' && <ProfileScreen renderBar={renderBar} balance={balance} daily={daily} onClaim={claim} onFriends={() => setTab('friends')} onDeleted={accountDeleted} />}
@@ -357,7 +383,7 @@ function Shell() {
           return (
             <Pressable key={key} onPress={() => { setTab(key); if (key !== 'pools') setPoolIntent(undefined); }} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={soon ? 'clips, coming soon' : undefined}>
               {dot > 0 && <View style={styles.dot}><T size={10} weight="bold" color={colors.white}>{dot}</T></View>}
-              {soon && <View style={styles.soon}><T size={9} weight="bold" color={colors.deep}>soon</T></View>}
+              {soon && <View style={styles.soon}><T size={9} weight="bold" color={colors.deepFixed}>soon</T></View>}
               <Ionicons name={(on ? icon : `${icon}-outline`) as keyof typeof Ionicons.glyphMap} size={24} color={on ? colors.brand : colors.muted} />
               <T weight="bold" size={12} color={on ? colors.brand : colors.muted}>{label}</T>
             </Pressable>
@@ -375,7 +401,7 @@ function FeedEnd({ height, onPools, onCreate, onInvite }: { height: number; onPo
       <T size={44}>🛵</T>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>you called them all</H>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>new clips land as players post them. until then, pull your friends in. you both get 10 coins.</T>
-      <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>invite friends · +10 each</T></Pressable>
+      <Pressable onPress={onInvite} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deepFixed}>invite friends · +10 each</T></Pressable>
       <Pressable onPress={onPools} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>start a friend pool</T></Pressable>
       <Pressable onPress={onCreate} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>post your own clip · earn coins</T></Pressable>
     </View>
@@ -386,26 +412,20 @@ function ClipsSoon({ topInset, onPools, onInvite }: { topInset: number; onPools:
   return (
     <View style={[styles.end, { flex: 1, paddingTop: topInset + 72, backgroundColor: colors.royal }]}>
       <BlobBanner />
-      <View style={styles.soonPill}><T size={13} weight="bold" color={colors.deep}>coming soon</T></View>
+      <View style={styles.soonPill}><T size={13} weight="bold" color={colors.deepFixed}>coming soon</T></View>
       <H size={34} color={colors.white} style={{ textAlign: 'center' }}>guess what happens next</H>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>short clips that pause right before the moment. call it with free coins. dropping soon.</T>
       <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>for now: start a pool with your friends.</T>
-      <Pressable onPress={onPools} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deep}>start a friend pool</T></Pressable>
+      <Pressable onPress={onPools} style={[styles.endBtn, { backgroundColor: colors.yellow }]} accessibilityRole="button"><T weight="bold" color={colors.deepFixed}>start a friend pool</T></Pressable>
       <Pressable onPress={onInvite} style={styles.endBtn} accessibilityRole="button"><T weight="bold" color={colors.brand}>invite friends · +10 each</T></Pressable>
     </View>
   );
 }
 
-/** ?i=JAM-XXXX&from=handle from a friend's invite link (web). */
-function readInvite(): { code: string; from: string; pool?: string; crew?: string } | null {
+/** ?i=JAM-XXXX&from=handle from a friend's invite link (web; the app reads links in Shell). */
+function readInvite(): Invite | null {
   if (Platform.OS !== 'web') return null;
-  try {
-    const q = new URLSearchParams((globalThis as { location?: Location }).location?.search ?? '');
-    const code = (q.get('i') ?? '').toUpperCase(), from = (q.get('from') ?? '').replace(/[^a-z0-9._]/gi, '').toLowerCase();
-    const pool = (q.get('pool') ?? '').toLowerCase(), crew = (q.get('crew') ?? '').toLowerCase();
-    const uuid = (s: string) => (/^[0-9a-f-]{36}$/.test(s) ? s : undefined);
-    return /^(BND|JAM)-[A-Z0-9]{4}$/.test(code) && from.length >= 3 ? { code, from, pool: uuid(pool), crew: uuid(crew) } : null;
-  } catch { return null; }
+  try { return parseInvite((globalThis as { location?: Location }).location?.href); } catch { return null; }
 }
 function clearInviteFromUrl() {
   if (Platform.OS !== 'web') return;
@@ -418,11 +438,11 @@ const styles = StyleSheet.create({
   wideRoot: { backgroundColor: colors.royal, alignItems: 'center' },
   wideCol: { width: '100%', maxWidth: 680, backgroundColor: colors.cloud },
   header: { position: 'absolute', top: 0, left: 0, right: 0 },
-  tabs: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
+  tabs: { flexDirection: 'row', backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 2 },
   dot: { position: 'absolute', top: -4, left: '56%', zIndex: 1, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
   soon: { position: 'absolute', top: -6, left: '54%', zIndex: 1, backgroundColor: colors.yellow, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
   soonPill: { backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 },
   end: { backgroundColor: colors.sky, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
-  endBtn: { backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
+  endBtn: { backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
 });

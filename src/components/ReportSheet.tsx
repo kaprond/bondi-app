@@ -66,7 +66,7 @@ export function ReportSheet({ poolId, userId, onClose, onBlocked }: { poolId?: s
 }
 
 const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 20, paddingBottom: 28, gap: 12, ...shadow.soft },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.card, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 20, paddingBottom: 28, gap: 12, ...shadow.soft },
   grab: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: colors.line },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   check: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.cloud, borderRadius: 16, padding: 12 },

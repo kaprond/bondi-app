@@ -1,6 +1,8 @@
+import { Appearance } from 'react-native';
+
 /** LetsJam brand tokens. Brand palette: #051320 #0095B6 #FFFFFF #FFF000 #1765A9 #28275F #E16632 #F9C500 #224C89.
  *  Everything else here (soft/sky/deep/cloud/tint/line/muted/win) is a tint or a functional colour derived from it. */
-export const colors = {
+const light = {
   brand: '#0095B6',      // main
   brandSoft: '#33AAC5',  // headings, secondary buttons on the site
   sky: '#54B8CE',        // full-width section background
@@ -19,7 +21,27 @@ export const colors = {
   navy: '#224C89',       // palette
   win: '#14B87A',
   scrim: 'rgba(0, 30, 38, 0.55)',
+  card: '#FFFFFF',       // surfaces (cards, sheets, inputs)
+  inkFixed: '#051320',   // text on always-light surfaces (yellow, white QR box)
+  deepFixed: '#005264',
+  mutedFixed: '#6B7C82',
 };
+
+/** Dark mode: follows the phone setting when the app starts. Brand colours stay; surfaces and text flip. */
+const dark: typeof light = {
+  ...light,
+  deep: '#D9F2F8',       // headings
+  ink: '#E8F5F8',        // body text
+  muted: '#93ABB2',
+  cloud: '#07171E',      // page background
+  tint: '#16343F',
+  line: '#24434E',
+  card: '#11262F',
+  scrim: 'rgba(0, 0, 0, 0.62)',
+};
+
+export const isDark = (() => { try { return Appearance.getColorScheme() === 'dark'; } catch { return false; } })();
+export const colors = isDark ? dark : light;
 
 export const fonts = {
   display: 'Baloo2_700Bold',

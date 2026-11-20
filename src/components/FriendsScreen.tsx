@@ -15,8 +15,11 @@ import { Chip, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { PersonSheet } from './PersonSheet';
+import { Rival, useRivals } from '../rivals';
+import { poolsSnapshot } from './PoolsScreen';
 
 export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar; onPoolWith: (friendId: string) => void }) {
+  const rivals = useRivals(poolsSnapshot);
   useSocial();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -95,7 +98,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
           <Section title="sharpest callers" right={<T size={13} color={colors.muted}>hit rate</T>}>
             {board.slice(0, 5).map((p, i) => (
               <Pressable key={p.id} onPress={() => p.id !== ME && setOpen(p.id)} style={[styles.boardRow, p.id === ME && styles.boardMe]}>
-                <View style={[styles.rank, i === 0 && { backgroundColor: colors.yellow }]}><T weight="bold" size={13} color={colors.deep}>{i + 1}</T></View>
+                <View style={[styles.rank, i === 0 && { backgroundColor: colors.yellow }]}><T weight="bold" size={13} color={i === 0 ? colors.deepFixed : colors.deep}>{i + 1}</T></View>
                 <Avatar id={p.id} size={34} />
                 <T weight="bold" color={colors.deep} style={{ flex: 1 }}>{p.id === ME ? 'you' : p.name}</T>
                 <T size={13} color={colors.muted}>{p.stats.calls} calls</T>
@@ -121,7 +124,7 @@ export function FriendsScreen({ renderBar, onPoolWith }: { renderBar: RenderBar;
 
           <Section title={`friends (${friends.length})`}>
             {friends.length === 0 && <T color={colors.muted}>no friends yet. invite your besties above.</T>}
-            {friends.map((p) => <PersonRow key={p.id} p={p} onPress={() => setOpen(p.id)} />)}
+            {friends.map((p) => <PersonRow key={p.id} p={p} rival={rivals.find((r) => r.userId === p.id)} onPress={() => setOpen(p.id)} />)}
           </Section>
 
           {suggestions().length > 0 && (
@@ -166,13 +169,13 @@ export function RelationButton({ id, compact }: { id: string; compact?: boolean 
   );
 }
 
-function PersonRow({ p, onPress }: { p: Person; onPress: () => void }) {
+function PersonRow({ p, onPress, rival }: { p: Person; onPress: () => void; rival?: Rival }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]} accessibilityRole="button">
       <Avatar id={p.id} size={44} />
       <View style={{ flex: 1 }}>
         <T weight="bold" color={colors.deep}>{p.name}</T>
-        <T size={13} color={colors.muted}>@{p.handle} · {p.city}</T>
+        <T size={13} color={colors.muted}>@{p.handle} · {p.city}{rival ? ` · ⚔️ ${rival.me}–${rival.them}` : ''}</T>
       </View>
       <RelationButton id={p.id} compact />
     </Pressable>
@@ -242,13 +245,13 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.cloud },
   band: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 22, gap: 10 },
   inviteRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 4 },
-  code: { backgroundColor: colors.white, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.line },
+  code: { backgroundColor: colors.card, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.line },
   body: { padding: 18, gap: 18 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 16, borderWidth: 1.5, borderColor: colors.line },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 16, borderWidth: 1.5, borderColor: colors.line },
   searchInput: { flex: 1, paddingVertical: 12, fontSize: 16, fontFamily: fonts.bodySemi, color: colors.ink },
   section: { gap: 8 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
-  card: { backgroundColor: colors.white, borderRadius: radius.card, padding: 8, gap: 2, ...shadow.soft },
+  card: { backgroundColor: colors.card, borderRadius: radius.card, padding: 8, gap: 2, ...shadow.soft },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8, borderRadius: 16 },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   small: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.tint },
@@ -262,11 +265,11 @@ const styles = StyleSheet.create({
   relOff: { backgroundColor: colors.tint },
   suggest: { width: 128, alignItems: 'center', gap: 4, backgroundColor: colors.cloud, borderRadius: 20, padding: 12 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  input: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
+  input: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
   emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  emojiBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.line },
+  emojiBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.line },
   emojiOn: { borderColor: colors.brand, backgroundColor: colors.tint },
-  pickRow: { backgroundColor: colors.white, borderWidth: 2, borderColor: 'transparent', ...shadow.soft },
+  pickRow: { backgroundColor: colors.card, borderWidth: 2, borderColor: 'transparent', ...shadow.soft },
   pickOn: { borderColor: colors.brand },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });

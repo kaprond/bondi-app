@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo-google-fonts/baloo-2": "^0.4.2",
     "@expo-google-fonts/quicksand": "^0.4.1",
+    "@expo/ui": "^58.0.29",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@supabase/supabase-js": "^2.118.0",
@@ -19,7 +20,10 @@
     "expo-notifications": "~58.1.9",
     "expo-splash-screen": "^58.0.13",
     "expo-status-bar": "~58.0.4",
+    "expo-store-review": "~58.0.3",
     "expo-video": "^58.0.13",
+    "expo-widgets": "~58.0.29",
+    "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "^19.3.0",
     "react-native": "0.88.1",
@@ -36,7 +40,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "rm -rf .testbuild && tsc src/challenges.ts src/league.ts src/missions.ts src/creator.ts --ignoreConfig --outDir .testbuild --module commonjs --target es2020 --skipLibCheck --esModuleInterop --jsx react-jsx && node challenges.test.mjs && node league.test.mjs && node creator.test.mjs && node clips.test.mjs",
+    "test": "rm -rf .testbuild && tsc src/challenges.ts src/league.ts src/missions.ts src/creator.ts src/templates.ts --ignoreConfig --outDir .testbuild --module commonjs --target es2020 --skipLibCheck --esModuleInterop --jsx react-jsx && node challenges.test.mjs && node league.test.mjs && node creator.test.mjs && node clips.test.mjs && node templates.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "private": true

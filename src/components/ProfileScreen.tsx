@@ -10,6 +10,10 @@ import { shareText } from '../share';
 import { AVATAR_COLORS, AVATAR_EMOJI, crewList, friendList, inviteCode, inviteLink, me, updateProfile, useSocial } from '../social';
 import { colors, fonts, radius, shadow } from '../theme';
 import { Coin, Eyebrow, H, PillButton, T } from './ui';
+import { useMyTitles } from '../titles';
+import { rivalryMood, useRivals } from '../rivals';
+import { poolsSnapshot } from './PoolsScreen';
+import { nameOf } from '../social';
 import { RenderBar } from './TopBar';
 import { BlobHeader } from './Blob';
 import { AccountCard } from './AccountCard';
@@ -18,6 +22,8 @@ import { blockedList, deleteAccount, refreshBlocks, unblockUser, useBlocks } fro
 interface Props { renderBar: RenderBar; balance: number; daily: Daily | null; onClaim: () => void; onFriends: () => void; onDeleted: () => void }
 
 export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, onDeleted }: Props) {
+  const myTitles = useMyTitles(poolsSnapshot);
+  const rivals = useRivals(poolsSnapshot).slice(0, 3);
   useSocial();
   useBlocks();
   useEffect(() => { refreshBlocks(); }, []);
@@ -82,6 +88,36 @@ export function ProfileScreen({ renderBar, balance, daily, onClaim, onFriends, o
         </View>
 
         <LeagueCard onPress={openLeague} />
+
+        {rivals.length > 0 && (
+          <View style={styles.card}>
+            <Eyebrow label="⚔️ rivalries" />
+            {rivals.map((r) => (
+              <View key={r.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Avatar id={r.userId} size={34} />
+                <View style={{ flex: 1 }}>
+                  <T weight="bold" color={colors.deep}>you {r.me} – {r.them} {nameOf(r.userId)}</T>
+                  <T size={13} color={colors.muted}>{rivalryMood(r)}</T>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.card}>
+          <Eyebrow label="your titles this week" />
+          {myTitles.length === 0
+            ? <T size={13} color={colors.muted}>no crowns yet. call pools right (or very wrong) this week: 🔮 the oracle, 🐺 the underdog, 🤡 wrong again, 📣 ring leader, 🎲 all in.</T>
+            : myTitles.map((t, i) => (
+              <View key={t.key + (t.crew ?? '') + i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <T size={26}>{t.emoji}</T>
+                <View style={{ flex: 1 }}>
+                  <T weight="bold" color={colors.deep}>{t.title}{t.crew ? ` · ${t.crew}` : ''}</T>
+                  <T size={13} color={colors.muted}>{t.why}</T>
+                </View>
+              </View>
+            ))}
+        </View>
 
         <View style={styles.card}>
           <View style={styles.between}><Eyebrow label="badges" /><T size={13} color={colors.muted}>{got} of {badges.length}</T></View>
@@ -240,14 +276,14 @@ const styles = StyleSheet.create({
   band: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 22, gap: 12 },
   body: { padding: 18, gap: 16 },
   me: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  edit: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginTop: 6 },
+  edit: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginTop: 6 },
   social: { flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 },
   balance: { backgroundColor: colors.brand, borderRadius: radius.card, padding: 18, gap: 10, ...shadow.soft },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  tile: { flexBasis: '47%', flexGrow: 1, backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 2, ...shadow.soft },
-  card: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 12, ...shadow.soft },
+  tile: { flexBasis: '47%', flexGrow: 1, backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 2, ...shadow.soft },
+  card: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 12, ...shadow.soft },
   badges: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
   badge: { width: '33.33%', alignItems: 'center', gap: 4, paddingHorizontal: 4 },
   badgeIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
@@ -258,12 +294,12 @@ const styles = StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   preview: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: colors.white, ...shadow.soft },
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  emojiBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.line },
+  emojiBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.line },
   emojiOn: { borderColor: colors.brand, backgroundColor: colors.tint },
   colorRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', flexWrap: 'wrap' },
   swatch: { width: 30, height: 30, borderRadius: 15, borderWidth: 3, borderColor: colors.white, ...shadow.soft },
   swatchOn: { borderColor: colors.deep },
-  input: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
+  input: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
   handle: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 0 },
   handleInput: { flex: 1, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },
 });

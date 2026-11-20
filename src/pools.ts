@@ -186,6 +186,7 @@ const fromServer = (p: ServerPool): Pool => ({
  */
 export function createLivePoolsStore(onChange: () => void = () => {}) {
   let pools: Pool[] = [];
+  const aliases = new Map<string, string>(); // tmp id of a pool you just made → its server id
   const listeners = new Set<() => void>();
   const changed = () => { onChange(); listeners.forEach((l) => l()); };
 
@@ -215,6 +216,8 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
   return {
     live: true as const,
     list: () => pools.map((p) => ({ ...p })),
+    /** A just-created pool keeps working under its temporary id once the server id arrives. */
+    resolveId: (id: string) => aliases.get(id) ?? id,
     restore(_saved: Pool[]) { /* server is the source of truth */ },
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     refresh,
@@ -239,7 +242,7 @@ export function createLivePoolsStore(onChange: () => void = () => {}) {
       rpc<string>('create_pool', {
         p_group: crew.id, p_closes_at: input.closesAt ?? null, p_repeat: input.repeat ?? null, p_forfeit: input.forfeit?.trim() || null, p_question: input.question, p_stake: input.stake, p_subject: toServer(input.subjectId) ?? null,
         p_options: input.options.map((o) => ({ label: o.label, member: toServer(o.memberId) ?? null })),
-      }).then((id) => { p.id = id; }, (e: Error) => toast(e.message)).finally(refresh);
+      }).then((id) => { aliases.set(p.id, id); p.id = id; }, (e: Error) => toast(e.message)).finally(refresh);
       return p;
     },
 

@@ -41,7 +41,7 @@ export function InstallSheet({ kind, onDone }: { kind: 'prompt' | 'ios'; onDone:
 
 const styles = StyleSheet.create({
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,30,38,0.7)', alignItems: 'center', justifyContent: 'flex-end', padding: 14, zIndex: 35 },
-  card: { width: '100%', maxWidth: 420, backgroundColor: colors.white, borderRadius: radius.sheet, padding: 22, gap: 12, alignItems: 'center', ...shadow.soft },
+  card: { width: '100%', maxWidth: 420, backgroundColor: colors.card, borderRadius: radius.sheet, padding: 22, gap: 12, alignItems: 'center', ...shadow.soft },
   icon: { width: 72, height: 72, borderRadius: 18 },
   steps: { alignSelf: 'stretch', gap: 8, backgroundColor: colors.cloud, borderRadius: 16, padding: 14 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 10 },

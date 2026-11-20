@@ -201,6 +201,6 @@ const styles = StyleSheet.create({
   sound: { position: 'absolute', right: 16, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,40,50,0.45)' },
   friends: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   caption: { position: 'absolute', left: 16, right: 16, bottom: 22, gap: 4 },
-  hint: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  hint: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
 });
 

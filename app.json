@@ -2,18 +2,21 @@
   "expo": {
     "name": "LetsJam",
     "slug": "letsjam",
-    "version": "3.1.6",
+    "version": "3.1.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.joyride.bondi",
-      "buildNumber": "103",
+      "buildNumber": "105",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:app.letsjamnow.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -46,7 +49,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "LetsJam needs your videos so you can post a clip.",
+          "photosPermission": "LetsJam needs your photos so you can add proof to a pool or post a clip.",
           "cameraPermission": false,
           "microphonePermission": false
         }
@@ -65,6 +68,25 @@
         "expo-notifications",
         {
           "color": "#28275F"
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "OpenPools",
+              "displayName": "Open pools",
+              "description": "Your live pools and how long until they close.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium"
+                ]
+              },
+              "android": null
+            }
+          ]
         }
       ]
     ],

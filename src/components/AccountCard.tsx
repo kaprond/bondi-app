@@ -98,7 +98,7 @@ export function AccountCard() {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.white, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
+  card: { backgroundColor: colors.card, borderRadius: radius.card, padding: 16, gap: 10, ...shadow.soft },
   warn: { borderWidth: 2, borderColor: colors.sun },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   input: { backgroundColor: colors.cloud, borderWidth: 1.5, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, color: colors.ink, fontSize: 16, fontFamily: fonts.bodySemi },

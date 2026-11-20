@@ -49,12 +49,16 @@ export async function enablePush(ask: boolean): Promise<boolean> {
 export function wirePush(): () => void {
   const n = lib(); if (!n) return () => {};
   n.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
-  const open = (data: Record<string, unknown> | undefined) => {
+  let lastOpened = '';
+  const open = (data: Record<string, unknown> | undefined, key = '') => {
+    if (key && key !== lastOpened) { lastOpened = key; track('push_opened', { go: String(data?.go ?? ''), nudge: String(data?.nudge ?? '') }); }
     if (data?.go === 'pool') emit({ kind: 'go', to: 'pools', poolId: typeof data.id === 'string' ? data.id : undefined });
+    else if (data?.go === 'crew') emit({ kind: 'go', to: 'pools', crewId: typeof data.id === 'string' ? data.id : undefined });
+    else if (data?.go === 'pools') emit({ kind: 'go', to: 'pools' });
     else if (data?.go === 'friends') emit({ kind: 'go', to: 'friends' });
   };
-  n.getLastNotificationResponseAsync().then((r) => r && open(r.notification.request.content.data as Record<string, unknown>)).catch(() => {});
-  const sub = n.addNotificationResponseReceivedListener((r) => open(r.notification.request.content.data as Record<string, unknown>));
+  n.getLastNotificationResponseAsync().then((r) => r && open(r.notification.request.content.data as Record<string, unknown>, r.notification.request.identifier)).catch(() => {});
+  const sub = n.addNotificationResponseReceivedListener((r) => open(r.notification.request.content.data as Record<string, unknown>, r.notification.request.identifier));
   enablePush(false).catch(() => {}); // refresh the token if permission was already given
   return () => sub.remove();
 }

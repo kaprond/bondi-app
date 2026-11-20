@@ -31,7 +31,7 @@ export function LeagueScreen({ topInset, onClose }: { topInset: number; onClose:
         <T size={56}>{tier.emoji}</T>
         <H size={38} color={colors.white}>{tier.name} league</H>
         <T weight="semi" color={colors.white} style={{ textAlign: 'center' }}>coins won this week. top {UP} move up{lg.tier < TIERS.length - 1 ? ` to ${next.name}` : ''}, bottom {DOWN} move down.</T>
-        <View style={styles.status}><T size={13} weight="bold" color={colors.deep}>#{me.rank} · {status}</T></View>
+        <View style={styles.status}><T size={13} weight="bold" color={colors.deepFixed}>#{me.rank} · {status}</T></View>
       </LinearGradient>
       <ScrollView ref={list} contentContainerStyle={{ padding: 14, gap: 6 }}>
         {rows.map((r) => (
@@ -68,10 +68,10 @@ const styles = StyleSheet.create({
   page: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.cloud, zIndex: 25 },
   head: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 18, gap: 4, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   top: { alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  ends: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
+  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  ends: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   status: { marginTop: 8, backgroundColor: colors.yellow, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 },
-  row: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderRadius: 16, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line },
+  row: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line },
   rowMe: { borderColor: colors.brand, backgroundColor: colors.tint, borderWidth: 2.5 },
   bot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   coins: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -96,6 +96,6 @@ export function LeagueCard({ onPress }: { onPress: () => void }) {
   );
 }
 const card = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, borderRadius: radius.card, padding: 14, borderWidth: 1.5, borderColor: colors.line },
+  wrap: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.card, padding: 14, borderWidth: 1.5, borderColor: colors.line },
   badge: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
 });
