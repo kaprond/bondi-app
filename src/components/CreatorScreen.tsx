@@ -10,6 +10,7 @@ import { colors, fonts, radius, shadow } from '../theme';
 import { Side } from '../types';
 import { Chip, Coin, Eyebrow, H, PillButton, T } from './ui';
 import { RenderBar } from './TopBar';
+import { PaidCreatorsCard } from './PaidCreators';
 
 const pct = Math.round(COMMISSION_RATE * 100);
 
@@ -41,6 +42,7 @@ export function CreatorScreen({ renderBar, onBalance }: { renderBar: RenderBar; 
       </View>
 
       <View style={styles.body}>
+        <PaidCreatorsCard />
         <View style={styles.card}>
           <Eyebrow label="your clips" />
           {clips.length === 0 && <T color={colors.muted}>nothing yet. film something with a moment people can call, like a trick shot, a race, or a “will it hold”.</T>}

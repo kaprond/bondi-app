@@ -14,6 +14,7 @@ export interface QuickTemplate {
 }
 
 export const QUICK: QuickTemplate[] = [
+  { key: 'clip', emoji: '🎬', label: 'crew clip', question: 'does he make it?', mode: 'yesno', deadline: '15m' },
   { key: 'late', emoji: '⏰', label: 'who’s late?', question: 'who shows up last tonight?', mode: 'members', pick: 4, deadline: 'tonight' },
   { key: 'match', emoji: '⚽', label: 'match result', question: 'who wins the match?', mode: 'custom', outcomes: ['home', 'draw', 'away'], deadline: 'tonight' },
   { key: 'textback', emoji: '📱', label: 'texts back?', question: 'do they text back before midnight?', mode: 'yesno', deadline: 'tonight' },
