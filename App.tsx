@@ -47,9 +47,9 @@ import { FeedClip, Side, Stake } from './src/types';
 
 type Tab = 'feed' | 'pools' | 'create' | 'friends' | 'me';
 /** Launch: friend pools first. Flip to true to bring back the clip feed, posting and missions. */
-export const CLIPS_LIVE = false;
+export const CLIPS_LIVE = true;
 const TABS: readonly (readonly [Tab, string, string])[] = CLIPS_LIVE
-  ? [['feed', 'for you', 'play-circle'], ['pools', 'pools', 'trophy'], ['create', 'post', 'add-circle'], ['friends', 'friends', 'people'], ['me', 'me', 'person-circle']]
+  ? [['pools', 'pools', 'trophy'], ['feed', 'clips', 'play-circle'], ['create', 'post', 'add-circle'], ['friends', 'friends', 'people'], ['me', 'me', 'person-circle']]
   : [['pools', 'pools', 'trophy'], ['friends', 'friends', 'people'], ['feed', 'clips', 'play-circle'], ['me', 'me', 'person-circle']];
 const AGE_KEY = 'bondi.ageConfirmed';
 const INSTALL_KEY = 'bondi.installAsked';
@@ -92,7 +92,7 @@ function Shell() {
   const [dare, setDare] = useState<Dare | null>(() => (CLIPS_LIVE ? readDare() : null));
   const [activeIndex, setActiveIndex] = useState(0);
   const [height, setHeight] = useState(0);
-  const [tab, setTab] = useState<Tab>(CLIPS_LIVE ? 'feed' : 'pools');
+  const [tab, setTab] = useState<Tab>('pools'); // crews first; the clip feed is one tap away
   useEffect(() => { setScreen(tab); }, [tab]);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const clearToast = useCallback(() => setToast(null), []);

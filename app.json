@@ -9,14 +9,17 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.joyride.bondi",
-      "buildNumber": "105",
+      "buildNumber": "106",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
       "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:app.letsjamnow.com"
-      ]
+      ],
+      "privacyManifests": {
+        "NSPrivacyTracking": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -88,7 +91,8 @@
             }
           ]
         }
-      ]
+      ],
+      "./plugins/withNoTracking"
     ],
     "extra": {
       "eas": {

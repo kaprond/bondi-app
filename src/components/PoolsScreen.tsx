@@ -33,6 +33,8 @@ import { dismissPushOffer, enablePush, shouldOfferPush } from '../push';
 import { askForRatingAfterWin } from '../rate';
 import { syncWidget } from '../widget';
 import { pickAndAttachProof, useProof } from '../proof';
+import { ClipKind, pickAndAttachClip, useCrewClips } from '../crewClips';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 const store = LIVE ? createLivePoolsStore() : createPoolsStore(wallet.debit, wallet.credit, (pools) => save({ pools }));
 /** Read-only snapshot for other screens (demo rivalries/titles). */
@@ -756,6 +758,62 @@ function YourCall({ label, pot, onDone }: { label: string; pot: number; onDone: 
   );
 }
 
+/** Crew clip: the creator posts the setup (filmed up to the moment), the crew calls it, then the reveal drops. */
+function CrewClipBox({ p, closed }: { p: Pool; closed: boolean }) {
+  const mine = p.createdBy === ME;
+  const editable = mine && ['open', 'locked', 'proposed'].includes(p.status) && !p.id.startsWith('tmp-');
+  const clips = useCrewClips(p.id, true);
+  const [busy, setBusy] = useState<ClipKind | null>(null);
+  if (!clips.setup && !editable) return null;
+  const add = async (kind: ClipKind, film: boolean) => {
+    if (busy) return;
+    setBusy(kind);
+    try { if (await pickAndAttachClip(p.id, kind, film)) { clips.reload(); haptic.success(); toast(kind === 'setup' ? 'clip posted 🎬 the crew gets a ping' : 'reveal posted 🎬'); } }
+    catch (e) { toast((e as Error).message); }
+    finally { setBusy(null); }
+  };
+  const showReveal = !!clips.reveal && (closed || p.status !== 'open' || mine);
+  return (
+    <View style={styles.proof}>
+      {clips.setup ? (
+        <>
+          <T weight="bold" color={colors.deep}>🎬 {showReveal ? 'the setup' : 'watch it, then make your call'}</T>
+          <ClipPlayer uri={clips.setup} />
+        </>
+      ) : (
+        <>
+          <T weight="bold" color={colors.deep}>🎬 crew clip</T>
+          <T size={13} color={colors.muted}>film it up to the moment it happens (the shot, the jump, the first try), post it, and the crew calls it before you show the ending.</T>
+          <View style={styles.wrapRow}>
+            {Platform.OS !== 'web' && <Chip label={busy === 'setup' ? 'uploading…' : '📹 film it'} onPress={() => add('setup', true)} />}
+            <Chip label={busy === 'setup' ? 'uploading…' : 'pick a video'} onPress={() => add('setup', false)} />
+          </View>
+        </>
+      )}
+      {showReveal && (
+        <>
+          <T weight="bold" color={colors.deep}>🎬 the reveal</T>
+          <ClipPlayer uri={clips.reveal!} />
+        </>
+      )}
+      {clips.setup && !clips.reveal && clips.hasReveal && !mine && <T size={13} color={colors.muted}>the reveal is in. it unlocks when calls close 🔒</T>}
+      {clips.setup && editable && !clips.hasReveal && (
+        <View style={styles.between}>
+          <T size={13} color={colors.muted} style={{ flex: 1 }}>{closed ? 'calls are closed. show them how it ended.' : 'got the ending? post it now, the crew sees it when calls close.'}</T>
+          <Pressable onPress={() => add('reveal', false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="post the reveal">
+            <T weight="bold" color={colors.brand}>{busy === 'reveal' ? 'uploading…' : 'post the reveal'}</T>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ClipPlayer({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (pl) => { pl.loop = false; pl.muted = false; });
+  return <VideoView player={player} style={styles.clipVideo} contentFit="cover" nativeControls />;
+}
+
 /** Photo proof: the creator attaches it, the crew sees it while voting and after. Private to the crew. */
 function ProofBox({ p }: { p: Pool }) {
   const canAdd = p.createdBy === ME && ['open', 'locked', 'proposed'].includes(p.status) && !p.id.startsWith('tmp-');
@@ -861,6 +919,8 @@ function PoolDetail({ pool: p, onBack, refresh, renderBar, fresh }: { pool: Pool
           </>)}
         </View>
       )}
+
+      <CrewClipBox p={p} closed={closed} />
 
       <T weight="bold" color={colors.deep}>{mine || closed ? 'all picks' : p.status === 'open' ? `tap a pick to join for ${p.stake}` : 'all picks'}</T>
       {p.options.map((o) => {
@@ -1139,6 +1199,7 @@ const styles = StyleSheet.create({
   titleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 10, ...shadow.soft },
   proof: { backgroundColor: colors.cloud, borderRadius: radius.card, padding: 12, gap: 10 },
   proofImg: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.tint },
+  clipVideo: { width: '100%', aspectRatio: 9 / 16, maxHeight: 520, borderRadius: 14, backgroundColor: '#000', overflow: 'hidden' },
   option: { backgroundColor: colors.card, borderRadius: 18, padding: 14, gap: 10, borderWidth: 2, borderColor: 'transparent', ...shadow.soft },
   optionMine: { borderColor: colors.brand },
   optionWin: { backgroundColor: '#FFFBC2' },
