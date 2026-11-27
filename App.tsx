@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { askTrackingOnce } from './src/att';
 import { Invite, parseInvite, parseOpen } from './src/deeplink';
 import { FlatList, LayoutChangeEvent, Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,6 +102,8 @@ function Shell() {
   const { streak } = stats;
   const [setup, setSetup] = useState(false);
   const [warmup, setWarmup] = useState(false);
+  // Ask for App Tracking Transparency once the user is past onboarding (iOS only, once).
+  useEffect(() => { if (setup || warmup) return; const t = setTimeout(askTrackingOnce, 4000); return () => clearTimeout(t); }, [setup, warmup]);
   const [poolIntent, setPoolIntent] = useState<{ friendId: string; n: number } | undefined>();
   const [openPool, setOpenPool] = useState<{ id: string; n: number } | undefined>();
   const [openCrew, setOpenCrew] = useState<{ id: string; n: number } | undefined>();

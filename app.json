@@ -9,17 +9,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.joyride.bondi",
-      "buildNumber": "106",
+      "buildNumber": "107",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
       "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:app.letsjamnow.com"
-      ],
-      "privacyManifests": {
-        "NSPrivacyTracking": false
-      }
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -92,7 +89,12 @@
           ]
         }
       ],
-      "./plugins/withNoTracking"
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "LetsJam uses this to measure which invites and links bring friends in. We never sell your data."
+        }
+      ]
     ],
     "extra": {
       "eas": {
